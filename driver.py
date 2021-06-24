@@ -1,10 +1,10 @@
 import numpy as np
 import os
-from paramDefs import defineParamSpace
-from trainAutoencoder import objective_func, build_CAE
-from preprocUtils import aggDataSets
-from cnnUtils import transferWeights
-from miscUtils import getVarsFromData, readInputFile, catchInput
+from param_defs import defineParamSpace
+from train_autoencoder import objective_func, build_CAE
+from preproc_utils import aggDataSets
+from cnn_utils import transferWeights
+from misc_utils import getVarsFromData, readInputFile, catchInput
 from hyperopt import fmin, tpe, rand, Trials, space_eval
 from functools import partial 
 import tensorflow as tf

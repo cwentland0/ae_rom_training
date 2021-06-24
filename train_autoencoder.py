@@ -1,8 +1,8 @@
 import numpy as np
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = "2"
-from preprocUtils import preprocParamObjs, preprocRawData 
-from cnnUtils import setConvLayer, getLoss
+from preproc_utils import preprocParamObjs, preprocRawData 
+from cnn_utils import setConvLayer, getLoss
 import tensorflow as tf 
 from tensorflow.keras.layers import Dense, Input, Flatten, Reshape, Permute
 from tensorflow.keras.models import Model
@@ -11,7 +11,6 @@ from tensorflow.keras.callbacks import TensorBoard, EarlyStopping
 import tensorflow.keras.backend as K
 from hyperopt import STATUS_OK 
 import time
-import h5py
 import pickle
 
 ##### GLOBAL VARIABLES #####

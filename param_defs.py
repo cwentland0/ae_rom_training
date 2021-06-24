@@ -1,6 +1,5 @@
 from hyperopt import hp
 from hyperopt.pyll import scope
-from miscUtils import catchInput
 from numpy import nan
 import numpy as np
 
