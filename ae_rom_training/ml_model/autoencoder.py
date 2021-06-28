@@ -1,7 +1,10 @@
 from time import time
 
+from numpy import nan
 from hyperopt import STATUS_OK
 
+from ae_rom_training.constants import TRAIN_PARAM_NAMES, TRAIN_PARAM_DEFAULTS, TRAIN_PARAM_DTYPES
+from ae_rom_training.preproc_utils import catch_input
 from ae_rom_training.ml_model.encoder import Encoder
 from ae_rom_training.ml_model.decoder import Decoder
 
@@ -20,20 +23,45 @@ class Autoencoder():
         self.param_space = {}
 
         # baseline encoder and decoder
-        self.encoder = Encoder(input_dict, mllib)
-        breakpoint()
-        # self.decoder = Decoder(input_dict, mllib)
+        self.encoder = Encoder(input_dict, self.param_space, mllib)
+        self.decoder = Decoder(input_dict, self.param_space, mllib)
 
         # time-stepper, if requested
 
-    def build_and_train(self, params, data_train, data_val):
+        self.preproc_training_inputs(input_dict)
+
+    def preproc_training_inputs(self, input_dict):
+        """Set up parameter space for training inputs."""
+
+        # TODO: This doesn't need to be repeated every time an autoencoder is instantiated
+
+        if input_dict["use_hyperopt"]:
+            raise ValueError("Training input HyperOpt not implemented yet")
+
+        else:
+
+            for param_idx, param_name in enumerate(TRAIN_PARAM_NAMES):
+            
+                default = TRAIN_PARAM_DEFAULTS[param_idx]
+                if default is nan:
+                    # es_patience has no default, but is required if early_stopping = True
+                    if (param_name == "es_patience") and not self.param_space["early_stopping"]:
+                        continue
+                    
+                    self.param_space[param_name] = input_dict[param_name]
+
+                else:
+                    self.param_space[param_name] = catch_input(input_dict, param_name, default)
+
+    def build_and_train(self, params, input_dict, data_train, data_val):
         """Build and train full autoencoder.
         
-        Acts as objective function for HyperOpt.
+        Acts as objective function for HyperOpt, or normal training function without HyperOpt.
         """
 
         # build network
-        self.model = self.build(params)  # must be implicit batch for training
+        input_shape = data_train.shape[1:]
+        self.model = self.build(input_dict, params, input_shape)  # must be implicit batch for training
 
         # train network
         time_start = time()
@@ -51,11 +79,16 @@ class Autoencoder():
             "eval_time": eval_time,  # time (in seconds) to train model
         }
 
-    def build(self, params):
+    def build(self, input_dict, params, input_shape):
 
         # assemble encoder
+        self.encoder.assemble(input_dict, params, input_shape, batch_size=None)
+        breakpoint()
 
         # assemble decoder (mirror, if requested)
+        if input_dict["mirrored_decoder"]:
+            self.decoder.mirror_encoder()
+        self.decoder.assemble(input_dict, params, )
 
         # assemble time stepper (if requested)
 

@@ -34,14 +34,15 @@ LAYER_PARAM_LIST = [
     ["bias_init_dist", str, "zeros"],  # initial distribution of biases
     ["target_shape", tuple, nan],  # target shape for reshape layers
 ]
-LAYER_PARAM_NAMES, LAYER_PARAM_DEFAULTS, LAYER_PARAM_DTYPES = process_param_list(LAYER_PARAM_LIST)
+LAYER_PARAM_NAMES, LAYER_PARAM_DTYPES, LAYER_PARAM_DEFAULTS = process_param_list(LAYER_PARAM_LIST)
 
 # training parameters
 TRAIN_PARAM_LIST = [
     ["learn_rate", float, 1e-4],  # optimization algorithm learning rate
     ["max_epochs", int, nan],  # maximum number of training epochs
     ["loss_func", str, "mse"],  # string for loss function reference
+    ["early_stopping", bool, False],  # whether to use early stopping
     ["es_patience", int, nan],  # number of iterations before early-stopping kicks in
     ["batch_size", int, nan],  # batch size
 ]
-TRAIN_PARAM_NAMES, TRAIN_PARAM_DEFAULTS, TRAIN_PARAM_DTYPES = process_param_list(TRAIN_PARAM_LIST)
+TRAIN_PARAM_NAMES, TRAIN_PARAM_DTYPES, TRAIN_PARAM_DEFAULTS = process_param_list(TRAIN_PARAM_LIST)

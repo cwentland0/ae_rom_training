@@ -46,9 +46,9 @@ class TFKerasLibrary(MLLibrary):
         else:
             os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-    def get_input_layer(self, input_shape, batch_size=None):
+    def get_input_layer(self, input_shape, batch_size=None, name=None):
 
-        output_layer = Input(shape=input_shape, batch_size=batch_size)
+        output_layer = Input(shape=input_shape, batch_size=batch_size, name=name)
         return output_layer
 
     def get_conv_layer(
@@ -56,22 +56,42 @@ class TFKerasLibrary(MLLibrary):
         layer_input,
         dims,
         num_filters,
-        num_kernels,
+        kern_size,
         num_strides,
-        data_format,
+        conv_order,
         activation="None",
         padding="same",
         kern_reg=None,
+        kern_reg_val=0.0,
         act_reg=None,
+        act_reg_val=0.0,
         bias_reg=None,
+        bias_reg_val=0.0,
         kern_init="glorot_uniform",
         bias_init="zeros",
+        name=None,
     ):
+
+        # get regularizers, if requested
+        if kern_reg is not None:
+            kern_reg = self.get_regularization(kern_reg, kern_reg_val)
+        if act_reg is not None:
+            act_reg = self.get_regularization(act_reg, act_reg_val)
+        if bias_reg is not None:
+            bias_reg = self.get_regularization(bias_reg, bias_reg_val)
         
+        if conv_order == "NCHW":
+            data_format = "channels_first"
+        elif conv_order == "NHWC":
+            data_format = "channels_last"
+        else:
+            raise ValueError("Invalid conv_order: " + str(conv_order))
+
+        # set layer
         if dims == 1:
             layer_output = Conv1D(
                 filters=num_filters,
-                kernel_size=num_kernels,
+                kernel_size=kern_size,
                 strides=num_strides,
                 padding=padding,
                 activation=activation,
@@ -80,12 +100,13 @@ class TFKerasLibrary(MLLibrary):
                 kernel_regularizer=kern_reg,
                 activity_regularizer=act_reg,
                 bias_regularizer=bias_reg,
-                data_format=data_format
+                data_format=data_format,
+                name=name,
             )(layer_input)
         elif dims == 2:
             layer_output = Conv2D(
                 filters=num_filters,
-                kernel_size=num_kernels,
+                kernel_size=kern_size,
                 strides=num_strides,
                 padding=padding,
                 activation=activation,
@@ -95,11 +116,12 @@ class TFKerasLibrary(MLLibrary):
                 activity_regularizer=act_reg,
                 bias_regularizer=bias_reg,
                 data_format=data_format,
+                name=name,
             )(layer_input)
         elif dims == 3:
             layer_output = Conv3D(
                 filters=num_filters,
-                kernel_size=num_kernels,
+                kernel_size=kern_size,
                 strides=num_strides,
                 padding=padding,
                 activation=activation,
@@ -109,6 +131,7 @@ class TFKerasLibrary(MLLibrary):
                 activity_regularizer=act_reg,
                 bias_regularizer=bias_reg,
                 data_format=data_format,
+                name=name,
             )(layer_input)
         else:
             raise ValueError("Invalid dimensions for convolutional layer: " + str(dims))
@@ -120,22 +143,42 @@ class TFKerasLibrary(MLLibrary):
         layer_input,
         dims,
         num_filters,
-        num_kernels,
+        kern_size,
         num_strides,
-        data_format,
+        conv_order,
         activation="None",
         padding="same",
         kern_reg=None,
+        kern_reg_val=0.0,
         act_reg=None,
+        act_reg_val=0.0,
         bias_reg=None,
+        bias_reg_val=0.0,
         kern_init="glorot_uniform",
         bias_init="zeros",
+        name=None,
     ):
+
+        # get regularizers, if requested
+        if kern_reg is not None:
+            kern_reg = self.get_regularization(kern_reg, kern_reg_val)
+        if act_reg is not None:
+            act_reg = self.get_regularization(act_reg, act_reg_val)
+        if bias_reg is not None:
+            bias_reg = self.get_regularization(bias_reg, bias_reg_val)
         
+        if conv_order == "NCHW":
+            data_format = "channels_first"
+        elif conv_order == "NHWC":
+            data_format = "channels_last"
+        else:
+            raise ValueError("Invalid conv_order: " + str(conv_order))
+
+        # set layer
         if dims == 1:
             layer_output = Conv1DTranspose(
                 filters=num_filters,
-                kernel_size=num_kernels,
+                kernel_size=kern_size,
                 strides=num_strides,
                 padding=padding,
                 activation=activation,
@@ -145,11 +188,12 @@ class TFKerasLibrary(MLLibrary):
                 activity_regularizer=act_reg,
                 bias_regularizer=bias_reg,
                 data_format=data_format,
+                name=name,
             )(layer_input)
         elif dims == 2:
             layer_output = Conv2DTranspose(
                 filters=num_filters,
-                kernel_size=num_kernels,
+                kernel_size=kern_size,
                 strides=num_strides,
                 padding=padding,
                 activation=activation,
@@ -159,11 +203,12 @@ class TFKerasLibrary(MLLibrary):
                 activity_regularizer=act_reg,
                 bias_regularizer=bias_reg,
                 data_format=data_format,
+                name=name,
             )(layer_input)
         elif dims == 3:
             layer_output = Conv3DTranspose(
                 filters=num_filters,
-                kernel_size=num_kernels,
+                kernel_size=kern_size,
                 strides=num_strides,
                 padding=padding,
                 activation=activation,
@@ -173,6 +218,7 @@ class TFKerasLibrary(MLLibrary):
                 activity_regularizer=act_reg,
                 bias_regularizer=bias_reg,
                 data_format=data_format,
+                name=name,
             )(layer_input)
         else:
             raise ValueError("Invalid dimensions for transpose convolutional layer: " + str(dims))
@@ -185,16 +231,33 @@ class TFKerasLibrary(MLLibrary):
         output_size,
         activation="None",
         kern_reg=None,
+        kern_reg_val=0.0,
         act_reg=None,
+        act_reg_val=0.0,
         bias_reg=None,
+        bias_reg_val=0.0,
         kern_init="glorot_uniform",
         bias_init="zeros",
+        name=None,
+        flatten_count=None,
     ):
+
+        # get regularizers, if requested
+        if kern_reg is not None:
+            kern_reg = self.get_regularization(kern_reg, kern_reg_val)
+        if act_reg is not None:
+            act_reg = self.get_regularization(act_reg, act_reg_val)
+        if bias_reg is not None:
+            bias_reg = self.get_regularization(bias_reg, bias_reg_val)
 
         # if input is not flattened (batch dimension plus data dimension), flatten and note this change
         added_flatten = False
-        if tf.rank(layer_input) > 2:
-            layer_input = self.get_flatten_layer(layer_input)
+        if self.get_tensor_dims(layer_input) > 2:
+            if flatten_count is not None:
+                flatten_name = "flatten_" + str(flatten_count)
+            else:
+                flatten_name = None
+            layer_input = self.get_flatten_layer(layer_input, name=flatten_name)
             added_flatten = True
 
         layer_output = Dense(
@@ -205,29 +268,30 @@ class TFKerasLibrary(MLLibrary):
             bias_regularizer=bias_reg,
             kernel_initializer=kern_init,
             bias_initializer=bias_init,
+            name=name,
         )(layer_input)
     
         return layer_output, added_flatten
 
-    def get_reshape_layer(self, layer_input, target_shape):
+    def get_reshape_layer(self, layer_input, target_shape, name=None):
         """"Implement tensor input reshape."""
 
-        output_layer = Reshape(target_shape)(layer_input)
+        output_layer = Reshape(target_shape, name=name)(layer_input)
         return output_layer
 
-    def get_flatten_layer(self, layer_input):
+    def get_flatten_layer(self, layer_input, name=None):
         """Implement tensor input flatten."""
 
-        output_layer = Flatten()(layer_input)
+        output_layer = Flatten(name=name)(layer_input)
         return output_layer
 
     # return regularizer objects
-    def get_regularization(self, reg_name, reg_mult):
+    def get_regularization(self, reg_name, reg_val):
 
         if reg_name == "l2":
-            return l2(reg_mult)
+            return l2(reg_val)
         elif reg_name == "l1":
-            return l1(reg_mult)
+            return l1(reg_val)
         else:
             raise ValueError("Invalid regularization name: " + str(reg_name))
 
@@ -247,7 +311,7 @@ class TFKerasLibrary(MLLibrary):
         else:
             return loss_name  # assumed to be a built-in loss string
 
-    def get_callbacks():
+    def get_callbacks(self):
         pass
 
     def pure_l2(self, y_true, y_pred):
@@ -256,13 +320,13 @@ class TFKerasLibrary(MLLibrary):
         return K.sum(K.square(y_true - y_pred))
 
 
-    def pure_mse(y_true, y_pred):
+    def pure_mse(self, y_true, y_pred):
         """Strict mean-squared error, not including regularization contribution"""
 
         mse = MeanSquaredError()
         return mse(y_true, y_pred)
 
-    def transfer_weights(model1, model2):
+    def transfer_weights(self, model1, model2):
         """Transfer weights from one network to another.
         
         Useful for building explicit-batch network from trained implicit-batch network
@@ -270,3 +334,10 @@ class TFKerasLibrary(MLLibrary):
 
         model2.set_weights(model1.get_weights())
         return model2
+
+    def get_tensor_dims(self, tensor):
+        return len(tensor.shape.as_list())
+
+    def build_model_obj(self, layer_list):
+
+        return Model(layer_list[0], layer_list[-1])

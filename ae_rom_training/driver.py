@@ -53,46 +53,47 @@ def main():
         autoencoder = autoencoder_list[net_idx]
 
         if input_dict["use_hyperopt"]:
-            print("Performing hyper-parameter optimization!")
-            trials = Trials()
-            # wrap objective function to pass additional arguments
-            objective_func_wrapped = partial(
-                autoencoder.build_and_train,
-                input_dict=input_dict,
-                data_train=data_train,
-                data_val=data_val,
-                network_suffix=net_suff,
-                mllib=mllib,
-            )
+            raise ValueError("HyperOpt Trials not implemented yet")
+            # print("Performing hyper-parameter optimization!")
+            # trials = Trials()
+            # # wrap objective function to pass additional arguments
+            # objective_func_wrapped = partial(
+            #     autoencoder.build_and_train,
+            #     input_dict=input_dict,
+            #     data_train=data_train,
+            #     data_val=data_val,
+            #     network_suffix=net_suff,
+            #     mllib=mllib,
+            # )
 
-            # find "best" model according to specified hyperparameter optimization algorithm
-            best = fmin(
-                fn=objective_func_wrapped,
-                space=autoencoder.param_space,
-                algo=input_dict["hyperopt_algo"],
-                max_evals=input_dict["hyperopt_max_evals"],
-                show_progressbar=False,
-                rstate=np.random.RandomState(RANDOM_SEED),
-                trials=trials,
-            )
+            # # find "best" model according to specified hyperparameter optimization algorithm
+            # best = fmin(
+            #     fn=objective_func_wrapped,
+            #     space=autoencoder.param_space,
+            #     algo=input_dict["hyperopt_algo"],
+            #     max_evals=input_dict["hyperopt_max_evals"],
+            #     show_progressbar=False,
+            #     rstate=np.random.RandomState(RANDOM_SEED),
+            #     trials=trials,
+            # )
 
-            # TODO: train the model again on the full dataset with the best hyper-parameters
+            # # TODO: train the model again on the full dataset with the best hyper-parameters
 
-            # save HyperOpt metadata to disk
-            best_space = space_eval(space, best)
-            print("Best parameters:")
-            print(best_space)
-            f = open(os.path.join(model_dir, "hyperOptTrials" + net_suff + ".pickle"), "wb")
-            pickle.dump(trials, f)
-            f.close()
+            # # save HyperOpt metadata to disk
+            # best_space = space_eval(space, best)
+            # print("Best parameters:")
+            # print(best_space)
+            # f = open(os.path.join(model_dir, "hyperOptTrials" + net_suff + ".pickle"), "wb")
+            # pickle.dump(trials, f)
+            # f.close()
 
         else:
-            print("Optimizing single architecture!")
-            best = objective_func(space, data_input_train, data_input_val, data_format, model_dir, net_suff, mllib)
-            best_space = space
+            print("Optimizing single architecture...")
+            best = autoencoder.build_and_train(autoencoder.param_space, input_dict, data_train, data_val)
+            best_space = autoencoder.param_space
 
         # write parameter space to file
-        f = open(os.path.join(model_dir, "best_space" + net_suff + ".pickle"), "wb")
+        f = open(os.path.join(input_dict["model_dir"], "best_space" + net_suff + ".pickle"), "wb")
         pickle.dump(best_space, f)
         f.close()
 

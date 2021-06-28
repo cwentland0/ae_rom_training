@@ -2,16 +2,13 @@ from ae_rom_training.ml_model.ml_model import MLModel
 
 class Decoder(MLModel):
 
-    def __init__(self, input_dict, mllib):
+    def __init__(self, input_dict, param_space, mllib):
 
         self.param_prefix = "decoder"
-        super().__init__(input_dict, mllib)
+        super().__init__(input_dict, param_space, mllib)
 
         
 
-    def preproc_inputs():
-        """"Build assembly instructions"""
+    def mirror_encoder():
+        """Build parameter space by mirroring encoder."""
         pass
-
-    # def preproc_layer_input_mirror():
-    #     """Build assembly instructions by reversing encoder assembly instructions"""

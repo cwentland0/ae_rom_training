@@ -107,7 +107,7 @@ def read_input_file(input_file):
     input_dict["idx_end_list_val"] = catch_input(input_dict_raw, "idx_end_list_val", [None])
     input_dict["idx_skip_list_val"] = catch_input(input_dict_raw, "idx_skip_list_val", [None])
     input_dict["data_order"] = input_dict_raw["data_order"]
-    input_dict["network_order"] = input_dict_raw["network_order"]
+    input_dict["conv_order"] = catch_input(input_dict_raw, "conv_order", "NHWC")
     input_dict["network_suffixes"] = [""] * input_dict["num_networks"]
     for i, net_idxs in enumerate(input_dict["var_network_idxs"]):
         for j, idx in enumerate(net_idxs):
@@ -125,6 +125,7 @@ def read_input_file(input_file):
     input_dict["normal_scheme"] = input_dict_raw["normal_scheme"]
     input_dict["val_perc"] = input_dict_raw["val_perc"]
     input_dict["precision"] = catch_input(input_dict_raw, "precision", "32")  # string because "mixed" will be an option later
+    input_dict["mirrored_decoder"] = catch_input(input_dict_raw, "mirrored_decoder", False)
 
     # HyperOpt parameters
     input_dict["use_hyperopt"] = catch_input(input_dict_raw, "use_hyperopt", False)
@@ -213,7 +214,7 @@ def get_train_val_data(input_dict):
         )
 
         # up until now, data has been in NCHW, tranpose if requesting NHWC
-        if input_dict["network_order"] == "NHWC":
+        if input_dict["conv_order"] == "NHWC":
             if input_dict["num_dims"] == 1:
                 trans_axes = (0, 2, 1)
             elif input_dict["num_dims"] == 2:
