@@ -13,8 +13,9 @@ from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.losses import MeanSquaredError
 import tensorflow.keras.backend as K
 
-from ae_rom_training.constants import RANDOM_SEED
+from ae_rom_training.constants import RANDOM_SEED, TRAIN_VERBOSITY
 from ae_rom_training.ml_library.ml_library import MLLibrary
+from ae_rom_training.preproc_utils import get_shape_tuple
 
 
 class TFKerasLibrary(MLLibrary):
@@ -58,7 +59,7 @@ class TFKerasLibrary(MLLibrary):
         num_filters,
         kern_size,
         num_strides,
-        conv_order,
+        network_order,
         activation="None",
         padding="same",
         kern_reg=None,
@@ -80,12 +81,12 @@ class TFKerasLibrary(MLLibrary):
         if bias_reg is not None:
             bias_reg = self.get_regularization(bias_reg, bias_reg_val)
         
-        if conv_order == "NCHW":
+        if network_order == "NCHW":
             data_format = "channels_first"
-        elif conv_order == "NHWC":
+        elif network_order == "NHWC":
             data_format = "channels_last"
         else:
-            raise ValueError("Invalid conv_order: " + str(conv_order))
+            raise ValueError("Invalid network_order: " + str(network_order))
 
         # set layer
         if dims == 1:
@@ -145,7 +146,7 @@ class TFKerasLibrary(MLLibrary):
         num_filters,
         kern_size,
         num_strides,
-        conv_order,
+        network_order,
         activation="None",
         padding="same",
         kern_reg=None,
@@ -167,12 +168,12 @@ class TFKerasLibrary(MLLibrary):
         if bias_reg is not None:
             bias_reg = self.get_regularization(bias_reg, bias_reg_val)
         
-        if conv_order == "NCHW":
+        if network_order == "NCHW":
             data_format = "channels_first"
-        elif conv_order == "NHWC":
+        elif network_order == "NHWC":
             data_format = "channels_last"
         else:
-            raise ValueError("Invalid conv_order: " + str(conv_order))
+            raise ValueError("Invalid network_order: " + str(network_order))
 
         # set layer
         if dims == 1:
@@ -295,30 +296,10 @@ class TFKerasLibrary(MLLibrary):
         else:
             raise ValueError("Invalid regularization name: " + str(reg_name))
 
-    def get_optimizer(self, optimizer_name, learning_rate=0.001):
-        
-        if optimizer_name == "Adam":
-            return Adam(learning_rate=learning_rate)
-        else:
-            raise ValueError("Invalid regularization name: " + str(optimizer_name))
-
-    def get_loss_function(self, loss_name):
-
-        if loss_name == "pure_l2":
-            return self.pure_l2
-        elif loss_name == "pure_mse":
-            return self.pure_mse
-        else:
-            return loss_name  # assumed to be a built-in loss string
-
-    def get_callbacks(self):
-        pass
-
     def pure_l2(self, y_true, y_pred):
         """Strict L2 error"""
 
         return K.sum(K.square(y_true - y_pred))
-
 
     def pure_mse(self, y_true, y_pred):
         """Strict mean-squared error, not including regularization contribution"""
@@ -338,6 +319,111 @@ class TFKerasLibrary(MLLibrary):
     def get_tensor_dims(self, tensor):
         return len(tensor.shape.as_list())
 
-    def build_model_obj(self, layer_list):
+    def get_layer_io_shape(self, model_obj, layer_idx):
 
-        return Model(layer_list[0], layer_list[-1])
+        input_shape = get_shape_tuple(model_obj.layers[layer_idx].input_shape)[1:]
+        output_shape = get_shape_tuple(model_obj.layers[layer_idx].output_shape)[1:]
+
+        return input_shape, output_shape
+
+    def build_model_obj(self, tensor_list):
+
+        return Model(tensor_list[0], tensor_list[-1])
+
+    def display_model_summary(self, model_obj, displaystr=None):
+
+        if displaystr is not None:
+            print(displaystr)
+        model_obj.summary()
+
+    def merge_models(self, model_obj_list):
+
+        input_tensor = model_obj_list[0].layers[0].input
+        output_tensor = input_tensor
+        for model in model_obj_list:
+            output_tensor = model(output_tensor)
+
+        return Model(input_tensor, output_tensor)
+
+    def get_model_layer_type_list(self, model_obj):
+
+        type_list = []
+        for layer in model_obj.layers:
+            layer_type = layer.__class__.__name__
+            if layer_type == "InputLayer":
+                type_list.append("input")
+            elif layer_type[:4] == "Conv":
+                type_list.append(layer_type.lower())
+            elif layer_type == "Dense":
+                type_list.append("dense")
+            elif layer_type == "Flatten":
+                type_list.append("flatten")
+            elif layer_type == "Reshape":
+                type_list.append("reshape")
+            
+        return type_list
+
+    def get_optimizer(self, optimizer_name, params):
+        
+        if optimizer_name == "Adam":
+            return Adam(learning_rate=params["learn_rate"])
+        else:
+            raise ValueError("Invalid regularization name: " + str(optimizer_name))
+
+    def get_loss_function(self, loss_name, params):
+
+        if loss_name == "pure_l2":
+            return self.pure_l2
+        elif loss_name == "pure_mse":
+            return self.pure_mse
+        else:
+            return loss_name  # assumed to be a built-in loss string
+
+    def get_options(self, input_dict, params):
+        
+        callback_list = []
+        added_callback = False
+
+        if input_dict["early_stopping"]:
+            early_stop = EarlyStopping(patience=int(params["es_patience"]), restore_best_weights=True)
+            callback_list.append(early_stop)
+            added_callback = True
+
+
+        options = {}
+        if added_callback:
+            options["callbacks"] = callback_list
+        else:
+            options["callbacks"] = None
+
+        return options
+
+    def compile_model(self, model_obj, optimizer, loss):
+
+        model_obj.compile(optimizer=optimizer, loss=loss)
+
+    def train_model(self, model_obj, params, data_input_train, data_output_train, data_input_val, data_output_val, options):
+
+        if TRAIN_VERBOSITY == "none":
+            verbose = 0
+        elif TRAIN_VERBOSITY == "min":
+            verbose = 2
+        elif TRAIN_VERBOSITY == "max":
+            verbose = 1
+        else:
+            raise ValueError("Invalid entry for TRAIN_VERBOSITY: " + str(TRAIN_VERBOSITY))
+
+        model_obj.fit(
+            x=data_input_train,
+            y=data_output_train,
+            batch_size=int(params["batch_size"]),
+            epochs=int(params["max_epochs"]),
+            validation_data=(data_input_val, data_output_val),
+            verbose=verbose,
+            callbacks=options["callbacks"],
+        )
+
+    def calc_loss(self, model_obj, input_data, output_data):
+
+        loss = model_obj.evaluate(x=input_data, y=output_data, verbose=0)
+        return loss

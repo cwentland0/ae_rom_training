@@ -40,8 +40,8 @@ class MLModel():
         if (self.param_prefix == "decoder") and input_dict["mirrored_decoder"]:
             return
 
-        self.input_keys = [key for key, _ in input_dict.items() if (self.param_prefix + "_") in key]
-        self.num_layers = len(input_dict[self.param_prefix + "_layer_type"])
+        self.input_keys = [key for key, _ in input_dict.items() if key.startswith(self.param_prefix + "_")]
+        self.num_layers = len(input_dict[self.param_prefix + "_layer_type"]) # excluding input layer
 
         # loop through all inputs
         if input_dict["use_hyperopt"]:
@@ -118,22 +118,24 @@ class MLModel():
     def assemble(self, input_dict, params, input_shape, batch_size=None):
 
         # set layer parameters, handling HyperOpt
-        self.preproc_layer_input(input_dict, params)
+        if not ((self.param_prefix == "decoder") and input_dict["mirrored_decoder"]):
+            self.preproc_layer_input(input_dict, params)
 
         # start off with input layer
         self.layer_list.append(self.mllib.get_input_layer(input_shape, batch_size=batch_size, name="input_0"))
+        self.num_layers += 1
 
         input_count = 1
         conv_count, trans_conv_count = 0, 0
         dense_count = 0
         reshape_count, flatten_count = 0, 0
         self.num_addtl_layers = 0
-        for layer_dict in self.layer_params_list:
+        addtl_layer_idxs = []
+        for layer_idx, layer_dict in enumerate(self.layer_params_list):
 
             # TODO: check that this works with non-sequential topologies
             layer_type = layer_dict["layer_type"]
 
-            
             layer_input_idx = layer_dict["layer_input_idx"]
             # handle situations where layer is silently added (e.g. flatten for dense layer)
             if layer_input_idx != -1:
@@ -151,7 +153,7 @@ class MLModel():
                     layer_dict["num_filters"],
                     layer_dict["kern_size"],
                     layer_dict["strides"],
-                    input_dict["conv_order"],
+                    input_dict["network_order"],
                     activation=layer_dict["activation"],
                     padding=layer_dict["padding"],
                     kern_reg=layer_dict["kern_reg"],
@@ -169,13 +171,14 @@ class MLModel():
             # transpose convolution layer
             elif layer_type == "trans_conv":
                 dims = self.mllib.get_tensor_dims(layer_input) - 2  # ignore batch and channel dimensions
-                layer_output = self.mllib.get_trans_conv(
+                assert dims > 0, "Input to transpose convolution must have rank greater than 2. Did you forget a reshape layer?"
+                layer_output = self.mllib.get_trans_conv_layer(
                     layer_input,
                     dims,
                     layer_dict["num_filters"],
                     layer_dict["kern_size"],
                     layer_dict["strides"],
-                    input_dict["conv_order"],
+                    input_dict["network_order"],
                     activation=layer_dict["activation"],
                     padding=layer_dict["padding"],
                     kern_reg=layer_dict["kern_reg"],
@@ -209,6 +212,7 @@ class MLModel():
                 )
                 dense_count += 1
                 if added_flatten:
+                    addtl_layer_idxs.append(layer_idx + self.num_addtl_layers)
                     self.num_addtl_layers += 1
                     flatten_count += 1
 
@@ -236,23 +240,9 @@ class MLModel():
 
         # account for any layers added silently
         self.num_layers += self.num_addtl_layers
+        for layer_idx in addtl_layer_idxs:
+            self.layer_params_list.insert(layer_idx, "addtl_layer")
 
         # finalize model object
-        self.model_obj = self.mllib.build_model_obj(self.layer_list)
-        breakpoint()
-        print("blep")
-
-    def train(self):
-
-        # get optimizer
-        # get loss
-        # get callbacks
-        # train
-        pass
-
-        
-
-    def save(self, out_dir):
-        pass
-
+        self.model_obj = self.mllib.build_model_obj(self.layer_list)        
 

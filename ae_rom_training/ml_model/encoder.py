@@ -9,8 +9,3 @@ class Encoder(MLModel):
         
         super().__init__(input_dict, param_space, mllib)
         
-
-    def check_build(self, input_dict):
-        """"Check that the encoder was built correctly"""
-        
-        pass

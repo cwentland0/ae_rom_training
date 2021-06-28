@@ -1,6 +1,7 @@
 from numpy import nan
 
 RANDOM_SEED = 24
+TRAIN_VERBOSITY = "min"
 
 def process_param_list(param_list):
     param_names = [item[0] for item in param_list]
@@ -41,6 +42,7 @@ TRAIN_PARAM_LIST = [
     ["learn_rate", float, 1e-4],  # optimization algorithm learning rate
     ["max_epochs", int, nan],  # maximum number of training epochs
     ["loss_func", str, "mse"],  # string for loss function reference
+    ["optimizer", str, "Adam"],  # training optimizer
     ["early_stopping", bool, False],  # whether to use early stopping
     ["es_patience", int, nan],  # number of iterations before early-stopping kicks in
     ["batch_size", int, nan],  # batch size

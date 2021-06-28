@@ -22,12 +22,6 @@ class Autoencoder():
         self.network_suffix = network_suffix
         self.param_space = {}
 
-        # baseline encoder and decoder
-        self.encoder = Encoder(input_dict, self.param_space, mllib)
-        self.decoder = Decoder(input_dict, self.param_space, mllib)
-
-        # time-stepper, if requested
-
         self.preproc_training_inputs(input_dict)
 
     def preproc_training_inputs(self, input_dict):
@@ -60,12 +54,13 @@ class Autoencoder():
         """
 
         # build network
-        input_shape = data_train.shape[1:]
-        self.model = self.build(input_dict, params, input_shape)  # must be implicit batch for training
+        data_shape = data_train.shape[1:]
+        self.model = self.build(input_dict, params, data_shape, batch_size=None)  # must be implicit batch for training
+        self.check_build(input_dict, data_shape)
 
         # train network
         time_start = time()
-        loss_train, loss_val = self.train(params, data_train, data_val)
+        loss_train, loss_val = self.train(input_dict, params, data_train, data_val)
         eval_time = time() - time_start
 
         # check if this model is the best so far, if so save
@@ -78,26 +73,6 @@ class Autoencoder():
             "status": STATUS_OK,  # check for correct exit
             "eval_time": eval_time,  # time (in seconds) to train model
         }
-
-    def build(self, input_dict, params, input_shape):
-
-        # assemble encoder
-        self.encoder.assemble(input_dict, params, input_shape, batch_size=None)
-        breakpoint()
-
-        # assemble decoder (mirror, if requested)
-        if input_dict["mirrored_decoder"]:
-            self.decoder.mirror_encoder()
-        self.decoder.assemble(input_dict, params, )
-
-        # assemble time stepper (if requested)
-
-        pass
-
-    def train(self, param_space):
-        # print summary before training
-        loss_train, loss_val = 1e-5, 1e-5
-        return loss_train, loss_val
 
     def check_best(self):
         pass

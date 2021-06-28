@@ -9,7 +9,7 @@ from hyperopt import fmin, Trials, space_eval
 from ae_rom_training.constants import RANDOM_SEED
 from ae_rom_training.preproc_utils import read_input_file, get_train_val_data
 from ae_rom_training.ml_library import get_ml_library
-from ae_rom_training.ml_model.autoencoder import Autoencoder
+from ae_rom_training.ml_model.autoencoder.baseline import BaselineAE
 
 np.random.seed(RANDOM_SEED)  # seed NumPy RNG
 
@@ -40,9 +40,13 @@ def main():
 
     # initialize all autoencoders
     autoencoder_list = []
+    autoencoder_type = input_dict["autoencoder_type"]
     for net_idx in range(input_dict["num_networks"]):
         net_suff = input_dict["network_suffixes"][net_idx]
-        autoencoder_list.append(Autoencoder(input_dict, mllib, net_suff))
+        if autoencoder_type == "baseline":
+            autoencoder_list.append(BaselineAE(input_dict, mllib, net_suff))
+        else:
+            raise ValueError("Invalid autoencoder_type selection: " + str(autoencoder_type))
 
     # optimize each model
     for net_idx in range(input_dict["num_networks"]):
