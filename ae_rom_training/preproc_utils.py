@@ -113,12 +113,18 @@ def read_input_file(input_file):
         for j, idx in enumerate(net_idxs):
             input_dict["network_suffixes"][i] += "_" + str(idx)
     num_datasets_train = len(input_dict["data_files_train"])
-    if len(input_dict["idx_start_list"]) == 1:
-        input_dict["idx_start_list"] *= num_datasets_train
-    if len(input_dict["idx_end_list"]) == 1:
-        input_dict["idx_end_list"] *= num_datasets_train
-    if len(input_dict["idx_skip_list"]) == 1:
-        input_dict["idx_skip_list"] *= num_datasets_train
+    if len(input_dict["idx_start_list_train"]) == 1:
+        input_dict["idx_start_list_train"] *= num_datasets_train
+    if len(input_dict["idx_end_list_train"]) == 1:
+        input_dict["idx_end_list_train"] *= num_datasets_train
+    if len(input_dict["idx_skip_list_train"]) == 1:
+        input_dict["idx_skip_list_train"] *= num_datasets_train
+    if len(input_dict["idx_start_list_val"]) == 1:
+        input_dict["idx_start_list_val"] *= num_datasets_train
+    if len(input_dict["idx_end_list_val"]) == 1:
+        input_dict["idx_end_list_val"] *= num_datasets_train
+    if len(input_dict["idx_skip_list_val"]) == 1:
+        input_dict["idx_skip_list_val"] *= num_datasets_train
 
     # training parameters
     input_dict["autoencoder_type"] = input_dict_raw["autoencoder_type"]

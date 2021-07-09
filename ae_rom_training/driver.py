@@ -96,8 +96,8 @@ def main():
             best = autoencoder.build_and_train(autoencoder.param_space, input_dict, data_train, data_val)
             best_space = autoencoder.param_space
 
-        # write parameter space to file
-        f = open(os.path.join(input_dict["model_dir"], "best_space" + net_suff + ".pickle"), "wb")
+        # write parameters to file
+        f = open(os.path.join(input_dict["model_dir"], "best_params" + net_suff + ".pickle"), "wb")
         pickle.dump(best_space, f)
         f.close()
 

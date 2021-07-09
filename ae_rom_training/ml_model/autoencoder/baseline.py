@@ -1,4 +1,4 @@
-
+import os
 
 from ae_rom_training.ml_model.autoencoder.autoencoder import Autoencoder
 from ae_rom_training.ml_model.encoder import Encoder
@@ -71,4 +71,17 @@ class BaselineAE(Autoencoder):
         loss_train = self.mllib.calc_loss(self.model_obj, data_train, data_train)
         loss_val = self.mllib.calc_loss(self.model_obj, data_val, data_val)
 
+        # pull out encoder and decoder models
+        # TODO: this layer indexing may not be valid for PyTorch
+        self.encoder.model_obj = self.mllib.get_layer(self.model_obj, -2)
+        self.decoder.model_obj = self.mllib.get_layer(self.model_obj, -1)
+
         return loss_train, loss_val
+
+    def save(self, model_dir):
+
+        encoder_path = os.path.join(model_dir, "encoder" + self.network_suffix)
+        self.mllib.save_model(self.encoder.model_obj, encoder_path)
+
+        decoder_path = os.path.join(model_dir, "decoder" + self.network_suffix)
+        self.mllib.save_model(self.decoder.model_obj, decoder_path)

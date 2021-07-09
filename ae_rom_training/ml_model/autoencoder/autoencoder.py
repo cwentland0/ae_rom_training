@@ -1,4 +1,6 @@
+import os
 from time import time
+import pickle
 
 from numpy import nan
 from hyperopt import STATUS_OK
@@ -64,7 +66,7 @@ class Autoencoder():
         eval_time = time() - time_start
 
         # check if this model is the best so far, if so save
-        self.check_best()
+        self.check_best(input_dict, loss_val, params)
 
         # return optimization info dictionary
         return {
@@ -74,5 +76,28 @@ class Autoencoder():
             "eval_time": eval_time,  # time (in seconds) to train model
         }
 
-    def check_best(self):
-        pass
+    def check_best(self, input_dict, loss_val, params):
+        
+        model_dir = input_dict["model_dir"]
+        loss_loc = os.path.join(model_dir, "valLoss" + self.network_suffix + ".dat")
+
+        # open minimum loss file
+        try:
+            with open(loss_loc) as f:
+                min_loss = float(f.read().strip())
+        except FileNotFoundError:
+            print("First iteration, writing best model")
+            min_loss = loss_val + 1.0  # first time, guarantee that loss is written to file
+
+        # if current model validation loss beats previous best, overwrite
+        if loss_val < min_loss:
+            print("New best found! Overwriting...")
+
+            self.save(model_dir)
+
+            params_loc = os.path.join(model_dir, "params" + self.network_suffix + ".pickle")
+            with open(params_loc, "wb") as f:
+                pickle.dump(params, f)
+
+            with open(loss_loc, "w") as f:
+                f.write(str(loss_val) + "\n")

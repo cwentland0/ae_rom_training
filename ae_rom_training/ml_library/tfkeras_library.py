@@ -319,6 +319,10 @@ class TFKerasLibrary(MLLibrary):
     def get_tensor_dims(self, tensor):
         return len(tensor.shape.as_list())
 
+    def get_layer(self, model_obj, layer_idx):
+
+        return model_obj.layers[layer_idx]
+
     def get_layer_io_shape(self, model_obj, layer_idx):
 
         input_shape = get_shape_tuple(model_obj.layers[layer_idx].input_shape)[1:]
@@ -427,3 +431,17 @@ class TFKerasLibrary(MLLibrary):
 
         loss = model_obj.evaluate(x=input_data, y=output_data, verbose=0)
         return loss
+
+    def save_model(self, model_obj, save_path, save_h5=False):
+        """Save Tensorflow model object.
+        
+        save_path should NOT have a file extension, as this is appended based on save_h5.
+        """
+
+        _, ext = os.path.splitext(save_path)
+        assert not ext, "save_path should not have a file extension; it currently has: " + ext
+
+        if save_h5:
+            model_obj.save(save_path, save_format="h5")
+        else:
+            model_obj.save(save_path)
