@@ -3,7 +3,8 @@ from time import time
 import pickle
 
 from numpy import nan
-from hyperopt import STATUS_OK
+# from hyperopt import STATUS_OK
+STATUS_OK = True
 
 from ae_rom_training.constants import TRAIN_PARAM_NAMES, TRAIN_PARAM_DEFAULTS, TRAIN_PARAM_DTYPES
 from ae_rom_training.preproc_utils import catch_input
@@ -79,7 +80,7 @@ class Autoencoder():
     def check_best(self, input_dict, loss_val, params):
         
         model_dir = input_dict["model_dir"]
-        loss_loc = os.path.join(model_dir, "valLoss" + self.network_suffix + ".dat")
+        loss_loc = os.path.join(model_dir, "val_loss" + self.network_suffix + ".dat")
 
         # open minimum loss file
         try:

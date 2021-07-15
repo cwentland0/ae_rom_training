@@ -4,7 +4,7 @@ import argparse
 import pickle
 
 import numpy as np
-from hyperopt import fmin, Trials, space_eval
+# from hyperopt import fmin, Trials, space_eval
 
 from ae_rom_training.constants import RANDOM_SEED
 from ae_rom_training.preproc_utils import read_input_file, get_train_val_data

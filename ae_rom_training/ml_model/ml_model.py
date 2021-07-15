@@ -16,8 +16,9 @@ class MLModel():
         mllib: MLLibrary object defining machine learning library functionalities
     """
 
-    def __init__(self, input_dict, param_space, mllib):
+    def __init__(self, param_prefix, input_dict, param_space, mllib):
         
+        self.param_prefix = param_prefix
         self.mllib = mllib
         self.len_prefix = len(self.param_prefix)
 

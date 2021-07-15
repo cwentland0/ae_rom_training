@@ -4,10 +4,9 @@ from ae_rom_training.ml_model.ml_model import MLModel
 
 class Decoder(MLModel):
 
-    def __init__(self, input_dict, param_space, mllib):
+    def __init__(self, param_prefix, input_dict, param_space, mllib):
 
-        self.param_prefix = "decoder"
-        super().__init__(input_dict, param_space, mllib)
+        super().__init__(param_prefix, input_dict, param_space, mllib)
 
 
     def mirror_encoder(self, encoder, input_dict):

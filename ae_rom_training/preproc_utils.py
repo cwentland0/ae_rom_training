@@ -2,9 +2,9 @@ import re
 import os
 
 import numpy as np
-from sklearn.model_selection import train_test_split
-from hyperopt import hp, tpe, rand
-from hyperopt.pyll import scope
+# from sklearn.model_selection import train_test_split
+# from hyperopt import hp, tpe, rand
+# from hyperopt.pyll import scope
 
 import matplotlib.pyplot as plt
 
@@ -140,12 +140,13 @@ def read_input_file(input_file):
     input_dict["hyperopt_algo"] = catch_input(input_dict_raw, "hyperopt_algo", "tpe")
     input_dict["hyperopt_max_evals"] = catch_input(input_dict_raw, "hyperopt_max_evals", 100)
     if input_dict["use_hyperopt"]:
-        if input_dict["hyperopt_algo"] == "rand":
-            input_dict["hyperopt_algo"] = rand.suggest
-        elif input_dict["hyperopt_algo"] == "tpe":
-            input_dict["hyperopt_algo"] = tpe.suggest
-        else:
-            raise ValueError("Invalid input for hyperopt_algo: " + str(input_dict["hyperopt_algo"]))
+        raise ValueError("HyperOpt out of commission")
+        # if input_dict["hyperopt_algo"] == "rand":
+        #     input_dict["hyperopt_algo"] = rand.suggest
+        # elif input_dict["hyperopt_algo"] == "tpe":
+        #     input_dict["hyperopt_algo"] = tpe.suggest
+        # else:
+        #     raise ValueError("Invalid input for hyperopt_algo: " + str(input_dict["hyperopt_algo"]))
 
     return input_dict
 
@@ -327,7 +328,11 @@ def preproc_raw_data(
         # concatenate samples after centering
         for dataset_num, data_arr in enumerate(data_list_train):
             data_in = center_data_set(data_arr, centering_scheme, model_dir, network_suffix, save_cent=True)
-            data_in_train, data_in_val = train_test_split(data_in, test_size=val_perc, random_state=RANDOM_SEED)
+            # data_in_train, data_in_val = train_test_split(data_in, test_size=val_perc, random_state=RANDOM_SEED)
+            num_samps_train = int(data_in.shape[0] * (1 - val_perc))
+            data_in_train = data_in[:num_samps_train, :, :]
+            data_in_val = data_in[num_samps_train:, :, :]
+            print("WARNING: train_test_split is NOT being used!")
             if dataset_num == 0:
                 data_train = data_in_train.copy()
                 data_val = data_in_val.copy()

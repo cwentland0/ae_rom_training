@@ -432,7 +432,7 @@ class TFKerasLibrary(MLLibrary):
         loss = model_obj.evaluate(x=input_data, y=output_data, verbose=0)
         return loss
 
-    def save_model(self, model_obj, save_path, save_h5=False):
+    def save_model(self, model_obj, save_path, save_h5=True):
         """Save Tensorflow model object.
         
         save_path should NOT have a file extension, as this is appended based on save_h5.
