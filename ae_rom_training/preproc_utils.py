@@ -123,15 +123,15 @@ def read_input_file(input_file):
     if len(input_dict["idx_skip_list_val"]) == 1:
         input_dict["idx_skip_list_val"] *= num_datasets_train
 
-    # training parameters
-    input_dict["autoencoder_type"] = input_dict_raw["autoencoder_type"]
+    # global parameters
+    input_dict["aerom_type"] = input_dict_raw["aerom_type"]
     input_dict["centering_scheme"] = input_dict_raw["centering_scheme"]
     input_dict["normal_scheme"] = input_dict_raw["normal_scheme"]
     input_dict["val_perc"] = input_dict_raw["val_perc"]
+    input_dict["training_format"] = input_dict_raw["training_format"]
     input_dict["precision"] = catch_input(
         input_dict_raw, "precision", "32"
     )  # string because "mixed" will be an option later
-    input_dict["early_stopping"] = catch_input(input_dict_raw, "early_stopping", False)
     input_dict["mirrored_decoder"] = catch_input(input_dict_raw, "mirrored_decoder", False)
 
     # HyperOpt parameters

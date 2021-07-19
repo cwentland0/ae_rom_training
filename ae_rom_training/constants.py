@@ -9,9 +9,9 @@ THOUSANDTH_LOG = -6.90775527  # log(-6.90775527) ~= 0.001,
 HUNDREDTH_LOG = -4.60517018  # log(-4.60517018) ~= 0.01
 TENTH_LOG = -2.30258509  # log(-2.30258509) ~= 0.1,
 
-# list of viable parameters, given as keyword-dtype-default triplets
+# dict of viable layer parameters, given as dtype-default doublets
 # if default is nan, then it is a required parameter and has no default
-# layer parameters, should have model prefix in input file
+# layer parameters should have model prefix in input file
 LAYER_PARAM_DICT = {
     "layer_type": [str, nan],
     "layer_input_idx": [int, nan],

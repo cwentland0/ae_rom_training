@@ -1,22 +1,28 @@
 import os
 
-from ae_rom_training.ml_model.autoencoder.autoencoder import Autoencoder
 from ae_rom_training.ml_model.encoder import Encoder
 from ae_rom_training.ml_model.decoder import Decoder
 
 
-class BaselineAE(Autoencoder):
-    """Simple autoencoder, only encoder and decoder"""
+class Autoencoder:
+    """Base class for autoencoders.
+    
+    All autoencoders have an outer "encoder" and a "decoder".
+    Child classes implement additional component networks and features.
+    """
 
-    def __init__(self, input_dict, mllib, network_suffix):
+    def __init__(self, mllib):
 
+        self.mllib = mllib
         self.encoder = Encoder("encoder", mllib)
         self.decoder = Decoder("decoder", mllib)
         self.component_networks = [self.encoder, self.decoder]
 
-        super().__init__(input_dict, mllib, network_suffix)
-
     def build(self, input_dict, params, data_shape, batch_size=None):
+        """Builds required outer encoder and decoder.
+        
+        Child class implementations should build any additional component networks.
+        """
 
         # assemble encoder
         self.encoder.assemble(input_dict, params, data_shape, batch_size=batch_size)
@@ -28,13 +34,10 @@ class BaselineAE(Autoencoder):
         self.decoder.assemble(input_dict, params, input_dict["latent_dim"])
         self.mllib.display_model_summary(self.decoder.model_obj, displaystr="DECODER")
 
-        # put the two together
-        self.model_obj = self.mllib.merge_models([self.encoder.model_obj, self.decoder.model_obj])
-
     def check_build(self, input_dict, data_shape):
-        """Check that autoencoder built ''correctly''
-
-        All this can really do is check that the I/O shapes are as expected.
+        """Check that outer encoder and decoder built ''correctly''
+        
+        Child class implementations should check any additional component networks.
         """
 
         # get I/O shapes
@@ -62,28 +65,51 @@ class BaselineAE(Autoencoder):
         )
 
     def train(self, input_dict, params, data_train, data_val):
+        """Trains the autoencoder alone.
+        
+        Child class implementations should return losses and pull out trained component networks.
+        """
 
         # get training parameters
-        loss = self.mllib.get_loss_function(input_dict["loss_func"], params)
-        optimizer = self.mllib.get_optimizer(input_dict["optimizer"], params)
-        options = self.mllib.get_options(input_dict, params)
+        loss = self.mllib.get_loss_function(input_dict["ae_loss_func"])
+        optimizer = self.mllib.get_optimizer(input_dict["ae_optimizer"], learn_rate=params["ae_learn_rate"])
+
+        # TODO: this is kind of jank
+        if "ae_early_stopping" in input_dict:
+            early_stopping = input_dict["ae_early_stopping"]
+            if input_dict["ae_early_stopping"]:
+                es_patience = input_dict["ae_es_patience"]
+            else:
+                es_patience = None
+        else:
+            early_stopping = False
+            es_patience = None
+        options = self.mllib.get_options(early_stopping, es_patience)
 
         # compile and train
         self.mllib.compile_model(self.model_obj, optimizer, loss)
-        self.mllib.train_model(self.model_obj, params, data_train, data_train, data_val, data_val, options)
+        self.mllib.train_model(
+            self.model_obj,
+            params["ae_batch_size"],
+            params["ae_max_epochs"],
+            data_train,
+            data_train,
+            data_val,
+            data_val,
+            options,
+        )
 
         # report training and validation loss
         loss_train = self.mllib.calc_loss(self.model_obj, data_train, data_train)
         loss_val = self.mllib.calc_loss(self.model_obj, data_val, data_val)
 
-        # pull out encoder and decoder models
-        # TODO: this layer indexing may not be valid for PyTorch
-        self.encoder.model_obj = self.mllib.get_layer(self.model_obj, -2)
-        self.decoder.model_obj = self.mllib.get_layer(self.model_obj, -1)
-
         return loss_train, loss_val
 
     def save(self, model_dir):
+        """Save encoder and decoder models.
+        
+        Child class implementations should save any additional component network models.
+        """
 
         encoder_path = os.path.join(model_dir, "encoder" + self.network_suffix)
         self.mllib.save_model(self.encoder.model_obj, encoder_path)

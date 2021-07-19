@@ -9,9 +9,13 @@ from hyperopt import fmin, Trials, space_eval
 from ae_rom_training.constants import RANDOM_SEED
 from ae_rom_training.preproc_utils import read_input_file, get_train_val_data
 from ae_rom_training.ml_library import get_ml_library
-from ae_rom_training.ml_model.autoencoder.baseline import BaselineAE
+from ae_rom_training.ae_rom.baseline_ae_rom import BaselineAEROM
 
 np.random.seed(RANDOM_SEED)  # seed NumPy RNG
+
+# TODO: detect if a component has no Hyperopt expressions, don't use Hyperopt
+# TODO: load trained autoencoder for separate training of time-stepper
+# TODO: define layer precision
 
 
 def main():
@@ -39,14 +43,14 @@ def main():
     data_train_list, data_val_list = get_train_val_data(input_dict)
 
     # initialize all autoencoders
-    autoencoder_list = []
-    autoencoder_type = input_dict["autoencoder_type"]
+    aerom_list = []
+    aerom_type = input_dict["aerom_type"]
     for net_idx in range(input_dict["num_networks"]):
         net_suff = input_dict["network_suffixes"][net_idx]
-        if autoencoder_type == "baseline":
-            autoencoder_list.append(BaselineAE(input_dict, mllib, net_suff))
+        if aerom_type == "baseline":
+            aerom_list.append(BaselineAEROM(input_dict, mllib, net_suff))
         else:
-            raise ValueError("Invalid autoencoder_type selection: " + str(autoencoder_type))
+            raise ValueError("Invalid aerom_type selection: " + str(aerom_type))
 
     # optimize each model
     for net_idx in range(input_dict["num_networks"]):
@@ -54,7 +58,7 @@ def main():
         net_suff = input_dict["network_suffixes"][net_idx]
         data_train = data_train_list[net_idx]
         data_val = data_val_list[net_idx]
-        autoencoder = autoencoder_list[net_idx]
+        aerom = aerom_list[net_idx]
 
         if input_dict["use_hyperopt"]:
 
@@ -62,14 +66,14 @@ def main():
 
             # wrap objective function to pass additional arguments
             objective_func_wrapped = partial(
-                autoencoder.build_and_train, input_dict=input_dict, data_train=data_train, data_val=data_val,
+                aerom.build_and_train, input_dict=input_dict, data_train=data_train, data_val=data_val,
             )
 
             # find "best" model according to specified hyperparameter optimization algorithm
             trials = Trials()
             best = fmin(
                 fn=objective_func_wrapped,
-                space=autoencoder.param_space,
+                space=aerom.param_space,
                 algo=input_dict["hyperopt_algo"],
                 max_evals=input_dict["hyperopt_max_evals"],
                 show_progressbar=False,
@@ -80,7 +84,7 @@ def main():
             # TODO: train the model again on the full dataset with the best hyper-parameters
 
             # save HyperOpt metadata to disk
-            best_space = space_eval(autoencoder.param_space, best)
+            best_space = space_eval(aerom.param_space, best)
             print("Best parameters:")
             print(best_space)
             f = open(os.path.join(input_dict["model_dir"], "hyper_opt_trials" + net_suff + ".pickle"), "wb")
@@ -89,8 +93,13 @@ def main():
 
         else:
             print("Optimizing single architecture...")
-            best = autoencoder.build_and_train(autoencoder.param_space, input_dict, data_train, data_val)
-            best_space = autoencoder.param_space
+
+            # train autoencoder alone (if required)
+            if (aerom.time_stepper is None) or (
+                (aerom.time_stepper is not None) and (aerom.training_format == "separate")
+            ):
+                best = aerom.build_and_train_ae(aerom.param_space, input_dict, data_train, data_val)
+            best_space = aerom.param_space
 
         # write parameters to file
         f = open(os.path.join(input_dict["model_dir"], "best_params" + net_suff + ".pickle"), "wb")

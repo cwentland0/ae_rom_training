@@ -4,24 +4,32 @@ import pickle
 
 from numpy import nan
 from hyperopt import STATUS_OK
+from tensorflow.python import training
 
 from ae_rom_training.constants import TRAIN_PARAM_DICT
+from ae_rom_training.preproc_utils import catch_input
 from ae_rom_training.hyperopt_utils import hp_expression
 
 
-class Autoencoder:
-    """Base class for autoencoders.
+class AEROM:
+    """Base class for autoencoder-based ROMs.
 
     Should always have an encoder and decoder, w/ optional time-stepper and/or parameter predictor.
     """
 
-    def __init__(self, input_dict, mllib, network_suffix):
+    def __init__(self, input_dict, mllib, network_suffix, training_format="separate"):
 
         self.model_dir = input_dict["model_dir"]
+        self.training_format = training_format
         self.mllib = mllib
         self.network_suffix = network_suffix
         self.param_space = {}
         self.hyperopt_param_names = []
+
+        # concatenate component networks
+        self.component_networks = self.autoencoder.component_networks.copy()
+        if self.time_stepper is not None:
+            self.component_networks.append(self.time_stepper.component_networks.copy())
 
         self.preproc_inputs(input_dict)
 
@@ -129,99 +137,96 @@ class Autoencoder:
                 self.param_space[input_key] = input_values_assign
 
         # training parameters
-        for param_name, param_list in TRAIN_PARAM_DICT.items():
+        # have to get separate training parameters if doing separate time-stepper training
+        if (self.training_format == "separate") and (self.time_stepper is not None):
+            training_prefixes = ["ae_", "ts_"]
+        elif self.time_stepper is None:
+            training_prefixes = ["ae_"]
+        else:
+            training_prefixes = [""]
 
-            default = param_list[1]
-            expr_key = param_name + "_expr"
-            expr_type = None
-            if expr_key in input_dict:
-                expr_type = input_dict[expr_key]
+        for training_prefix in training_prefixes:
+            for param_name, param_list in TRAIN_PARAM_DICT.items():
 
-            # has no default
-            if default is nan:
+                default = param_list[1]
 
-                # es_patience has no default, but is required if early_stopping = True
-                if (param_name == "es_patience") and ("early_stopping" not in self.param_space):
-                    continue
+                param_key = training_prefix + param_name
+                expr_key = param_key + "_expr"
+                expr_type = None
+                if expr_key in input_dict:
+                    expr_type = input_dict[expr_key]
 
-                try:
-                    param_val = input_dict[param_name]
-                except KeyError:
-                    raise KeyError(param_name + " has no default value, you must provide a value")
+                # has no default
+                if default is nan:
 
-            else:
+                    # es_patience has no default, but is required if early_stopping = True
+                    if (param_name == "es_patience") and ((training_prefix + "early_stopping") not in self.param_space):
+                        continue
 
-                try:
-                    param_val = input_dict[param_name]
-                except KeyError:
-                    param_val = default
+                    try:
+                        param_val = input_dict[param_key]
+                    except KeyError:
+                        raise KeyError(param_key + " has no default value, you must provide a value")
 
-            if input_dict["use_hyperopt"]:
-
-                # If providing an expression type, input must be a list
-                if expr_type is not None:
-                    assert isinstance(param_val, list), (
-                        "When using HyperOpt and providing "
-                        + expr_key
-                        + " for training input "
-                        + param_name
-                        + ", input must be a list"
-                    )
-
-                    self.param_space[param_name] = hp_expression(param_name, expr_type, param_val)
-                    self.hyperopt_param_names.append(param_name)
-
-                # If not providing an expression, input cannot be a list
                 else:
 
+                    try:
+                        param_val = input_dict[param_key]
+                    except KeyError:
+                        param_val = default
+
+                if input_dict["use_hyperopt"]:
+
+                    # If providing an expression type, input must be a list
+                    if expr_type is not None:
+                        assert isinstance(param_val, list), (
+                            "When using HyperOpt and providing "
+                            + expr_key
+                            + " for training input "
+                            + param_key
+                            + ", input must be a list"
+                        )
+
+                        self.param_space[param_key] = hp_expression(param_key, expr_type, param_val)
+                        self.hyperopt_param_names.append(param_key)
+
+                    # If not providing an expression, input cannot be a list
+                    else:
+
+                        assert not isinstance(param_val, list), (
+                            "When using HyperOpt and not providing "
+                            + expr_key
+                            + " for training input "
+                            + param_key
+                            + " input cannot be a list"
+                        )
+
+                        self.param_space[param_key] = hp_expression(param_key, "choice", [param_val])
+
+                # none of these should be list inputs when not using HyperOpt
+                else:
                     assert not isinstance(param_val, list), (
-                        "When using HyperOpt and not providing "
-                        + expr_key
-                        + " for training input "
-                        + param_name
-                        + " input cannot be a list"
+                        "When not using HyperOpt, training input " + param_key + " cannot be a list"
                     )
 
-                    self.param_space[param_name] = hp_expression(param_name, "choice", [param_val])
+                    self.param_space[param_key] = param_val
 
-            # none of these should be list inputs when not using HyperOpt
-            else:
-                assert not isinstance(param_val, list), (
-                    "When not using HyperOpt, training input " + param_name + " cannot be a list"
-                )
-
-                self.param_space[param_name] = param_val
-
-    def build_and_train(self, params, input_dict, data_train, data_val):
-        """Build and train full autoencoder.
+    def build_and_train_ae(self, params, input_dict, data_train, data_val):
+        """Build and train only-autoencoder AE-ROM.
 
         Acts as objective function for HyperOpt, or normal training function without HyperOpt.
         """
 
-        # build network
+        # build autoencoder
         data_shape = data_train.shape[1:]
-        self.model = self.build(input_dict, params, data_shape, batch_size=None)  # must be implicit batch for training
-        self.check_build(input_dict, data_shape)
+        self.model = self.autoencoder.build(
+            input_dict, params, data_shape, batch_size=None
+        )  # must be implicit batch for training
+        self.autoencoder.check_build(input_dict, data_shape)
 
-        # Display current Hyperopt selection
-        if input_dict["use_hyperopt"]:
-            print("========================")
-            print("CURRENT PARAMETER SAMPLE")
-            print("========================")
-            print("training parameters")
-            print("-------------------")
-            for param_key in self.hyperopt_param_names:
-                print(param_key + ": " + str(params[param_key]))
-            for network in self.component_networks:
-                print(network.param_prefix + " parameters")
-                print("-------------------")
-                for param_key in network.hyperopt_param_names:
-                    print(param_key + ": " + str(params[param_key]))
-            print("========================")
-
-        # train network
+        # train autoencoder
         time_start = time()
-        loss_train, loss_val = self.train(input_dict, params, data_train, data_val)
+        loss_train, loss_val = self.autoencoder.train(input_dict, params, data_train, data_val)
         eval_time = time() - time_start
 
         # check if this model is the best so far, if so save
@@ -234,6 +239,33 @@ class Autoencoder:
             "status": STATUS_OK,  # check for correct exit
             "eval_time": eval_time,  # time (in seconds) to train model
         }
+
+    def print_aerom_hyperopt_sample(self, params, ae=False, ts=False):
+        """Display current Hyperopt selection"""
+
+        print("========================")
+        print("CURRENT PARAMETER SAMPLE")
+        print("========================")
+
+        print("training parameters")
+        print("-------------------")
+        for param_key in self.hyperopt_param_names:
+            print(param_key + ": " + str(params[param_key]))
+
+        if ae:
+            self.print_component_hyperopt_sample(params, self.autoencoder)
+        if ts:
+            self.print_component_hyperopt_sample(params, self.time_stepper)
+
+        print("========================")
+
+    def print_component_hyperopt_sample(self, params, component):
+
+        for network in component.component_networks:
+            print(network.param_prefix + " parameters")
+            print("-------------------")
+            for param_key in network.hyperopt_param_names:
+                print(param_key + ": " + str(params[param_key]))
 
     def check_best(self, input_dict, loss_val, params):
 

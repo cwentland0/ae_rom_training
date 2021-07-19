@@ -367,14 +367,14 @@ class TFKerasLibrary(MLLibrary):
 
         return type_list
 
-    def get_optimizer(self, optimizer_name, params):
+    def get_optimizer(self, optimizer_name, learn_rate=None):
 
         if optimizer_name == "Adam":
-            return Adam(learning_rate=params["learn_rate"])
+            return Adam(learning_rate=learn_rate)
         else:
             raise ValueError("Invalid regularization name: " + str(optimizer_name))
 
-    def get_loss_function(self, loss_name, params):
+    def get_loss_function(self, loss_name):
 
         if loss_name == "pure_l2":
             return self.pure_l2
@@ -383,13 +383,13 @@ class TFKerasLibrary(MLLibrary):
         else:
             return loss_name  # assumed to be a built-in loss string
 
-    def get_options(self, input_dict, params):
+    def get_options(self, early_stopping=False, es_patience=None):
 
         callback_list = []
         added_callback = False
 
-        if input_dict["early_stopping"]:
-            early_stop = EarlyStopping(patience=int(params["es_patience"]), restore_best_weights=True)
+        if early_stopping:
+            early_stop = EarlyStopping(patience=int(es_patience), restore_best_weights=True)
             callback_list.append(early_stop)
             added_callback = True
 
@@ -406,7 +406,15 @@ class TFKerasLibrary(MLLibrary):
         model_obj.compile(optimizer=optimizer, loss=loss)
 
     def train_model(
-        self, model_obj, params, data_input_train, data_output_train, data_input_val, data_output_val, options
+        self,
+        model_obj,
+        batch_size,
+        max_epochs,
+        data_input_train,
+        data_output_train,
+        data_input_val,
+        data_output_val,
+        options,
     ):
 
         if TRAIN_VERBOSITY == "none":
@@ -421,8 +429,8 @@ class TFKerasLibrary(MLLibrary):
         model_obj.fit(
             x=data_input_train,
             y=data_output_train,
-            batch_size=int(params["batch_size"]),
-            epochs=int(params["max_epochs"]),
+            batch_size=int(batch_size),
+            epochs=int(max_epochs),
             validation_data=(data_input_val, data_output_val),
             verbose=verbose,
             callbacks=options["callbacks"],

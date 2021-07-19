@@ -6,6 +6,7 @@ from ae_rom_training.ml_model.autoencoder.autoencoder import Autoencoder
 from ae_rom_training.ml_model.encoder import Encoder
 from ae_rom_training.ml_model.decoder import Decoder
 
+
 class KoopmanAEOtto2019(Autoencoder):
     """Autoencoder which learns discrete Koopman, via Otto and Rowley (2019)"""
 
@@ -21,7 +22,6 @@ class KoopmanAEOtto2019(Autoencoder):
         self.beta = input_dict["koopman_beta"]
         self.epsilon_1 = input_dict["koopman_epsilon_1"]
         self.epsilon_2 = input_dict["koopman_epsilon_2"]
-
 
     def build(self, input_dict, params, data_shape, batch_size=None):
 
@@ -62,13 +62,19 @@ class KoopmanAEOtto2019(Autoencoder):
             "Encoder input shape does not match data shape: " + str(encoder_input_shape) + " vs. " + str(data_shape)
         )
         assert encoder_output_shape == latent_shape, (
-            "Encoder output shape does not match latent shape: " + str(encoder_output_shape) + " vs. " + str(latent_shape)
+            "Encoder output shape does not match latent shape: "
+            + str(encoder_output_shape)
+            + " vs. "
+            + str(latent_shape)
         )
         assert koopman_input_shape == latent_shape, (
             "Koopman input shape does not match latent shape: " + str(koopman_input_shape) + " vs. " + str(latent_shape)
         )
         assert koopman_output_shape == latent_shape, (
-            "Koopman output shape does not match latent shape: " + str(koopman_output_shape) + " vs. " + str(latent_shape)
+            "Koopman output shape does not match latent shape: "
+            + str(koopman_output_shape)
+            + " vs. "
+            + str(latent_shape)
         )
         assert decoder_input_shape == latent_shape, (
             "Decoder input shape does not match latent shape: " + str(decoder_input_shape) + " vs. " + str(latent_shape)
@@ -96,7 +102,7 @@ class KoopmanAEOtto2019(Autoencoder):
         # # compile and train
         # self.mllib.compile_model(self.model_obj, optimizer, loss)
         # self.mllib.train_model(self.model_obj, params, data_train, data_train, data_val, data_val, options)
-        
+
         # # report training and validation loss
         # loss_train = self.mllib.calc_loss(self.model_obj, data_train, data_train)
         # loss_val = self.mllib.calc_loss(self.model_obj, data_val, data_val)
@@ -111,13 +117,11 @@ class KoopmanAEOtto2019(Autoencoder):
     def calc_loss(self, koopman, true_snaps, true_latent, pred_snaps, pred_latent, delta_vec):
 
         # normalization constants
-        
 
         # TODO: this should be a Tensorflow function, just writing things out
         ae_loss = (1.0) / (1.0 + self.beta) * ()
 
         return loss
-
 
     def save(self, model_dir):
 
