@@ -122,8 +122,8 @@ class Autoencoder:
                         if any(isinstance(elem, list) for elem in input_value):
                             raise ValueError("If not using HyperOpt, cannot use list of lists inputs for " + input_key)
 
-                        # list length checking happens later
-                        input_values_assign = input_value
+                    # list length checking happens later
+                    input_values_assign = input_value
 
                 # assign completed list
                 self.param_space[input_key] = input_values_assign
