@@ -1,13 +1,11 @@
-from numpy import nan
-from tensorflow.python.keras.backend import flatten, reshape
-
-from ae_rom_training.constants import LAYER_PARAM_NAMES, LAYER_PARAM_DEFAULTS, LAYER_PARAM_DTYPES
+from ae_rom_training.constants import LAYER_PARAM_DICT
 
 # TODO: handle different network definitions for separate networks
 
-class MLModel():
+
+class MLModel:
     """Base class for component ML models that make up the autoencoder.
-    
+
     Examples include the encoder and decoder, as well as time steppers and parameter predictors.
 
     Args:
@@ -16,11 +14,12 @@ class MLModel():
         mllib: MLLibrary object defining machine learning library functionalities
     """
 
-    def __init__(self, param_prefix, input_dict, param_space, mllib):
-        
+    def __init__(self, param_prefix, mllib):
+
         self.param_prefix = param_prefix
         self.mllib = mllib
         self.len_prefix = len(self.param_prefix)
+        self.hyperopt_param_names = []
 
         # layer_list contains all outputs of layer calls
         # layer list should have dicts which have all the parameters needed for a given layer
@@ -28,93 +27,70 @@ class MLModel():
         self.layer_list = []
         self.layer_params_list = []
 
-        self.preproc_inputs(input_dict, param_space)
-
-    def preproc_inputs(self, input_dict, param_space):
-        """Reads all input values for a given model type, does preprocessing and simple error checking.
-        
-        Handles varied situations for using HyperOpt vs. no HyperOpt, list inputs vs. single inputs.
-        This is called BEFORE HyperOpt populates the parameter space, in-depth error checking is done later.
-        """
-
-        # don't assign a unique parameter space for a mirrored decoder
-        if (self.param_prefix == "decoder") and input_dict["mirrored_decoder"]:
-            return
-
-        self.input_keys = [key for key, _ in input_dict.items() if key.startswith(self.param_prefix + "_")]
-        self.num_layers = len(input_dict[self.param_prefix + "_layer_type"]) # excluding input layer
-
-        # loop through all inputs
-        if input_dict["use_hyperopt"]:
-            uses_hyperopt_dict = {}
-
-        for input_key in self.input_keys:
-            input_value = input_dict[input_key]
-
-            if input_dict["use_hyperopt"]:
-                raise ValueError("HyperOpt preprocessing not implemented yet")
-                # cycle if it's a HyperOpt type, should be caught by expression definition preproc
-                # if input is list
-                    # if list of lists
-                        # assert that length of list is number of layers
-                        # if expression type is list
-                            # assert list is number of layers
-                        # else
-                            # expand expression type
-                        # flag this parameter as having layer-wise HyperOpt
-                        # loop entries of list
-                            # if list
-                                # treat sublist as HyperOpt expression definitions
-                            # else
-                                # treat single values as fixed, do error checking
-                        # create list of flags denoting which layers have HyperOpt definitions
-                        # add new entries to HyperOpt space with numbered index suffixes and HyperOpt definition
-                    # else
-                        # if expression type is present
-                            # treat input as HyperOpt expression definition
-                        # if no expression type is present
-                            # treat input as fixed input, assert that length is number of layers
-
-                # else
-                    # if expression type is present
-                        # throw error, even if "choice" is requested it's pointless and confusing
-                    # if no expression type is present
-                        # error checking
-                        # expand input to number of layers
-                
-            # not running HyperOpt
-            else:
-                if isinstance(input_value, list):
-                    if any(isinstance(elem, list) for elem in input_value):
-                        raise ValueError("If not using HyperOpt, cannot use list of lists inputs for " + input_key)
-                    assert len(input_value) == self.num_layers, (
-                        "List input for " + input_key + " must have length " + str(self.num_layers))
-                    input_values_assign = input_value
-                else:
-                    # expand input to number of layers
-                    input_values_assign = [input_value] * self.num_layers
-
-            # assign completed list
-            param_space[input_key] = input_values_assign
-
     def preproc_layer_input(self, input_dict, params):
         """Do error checking and input expansions on layer inputs.
-        
-        If not using HyperOpt, then everything is already set by preproc_inputs and everything just gets moved into layer_params_list.
-        If using HyperOpt, this expands single inputs and 
+
+        If not using HyperOpt, then everything is already set by preproc_inputs
+        and everything just gets moved into layer_params_list.
         """
 
-        if input_dict["use_hyperopt"]:
-            raise ValueError("HyperOpt preproc_layer_input not implemented yet")
-        
+        # Get layer lists or expand single inputs
+        # params has already been preprocessed to be in the proper format
+        for input_key in self.input_keys:
+
+            if input_key.endswith("_expr"):
+                continue
+
+            param_type = input_key[self.len_prefix + 1 :]
+            dtype = LAYER_PARAM_DICT[param_type][0]
+
+            input_value = params[input_key]
+
+            # Check that length of list inputs matches number of layers
+            # Lists only appear when explicitly specified when NOT using Hyperopt
+            if isinstance(input_value, list):
+                assert len(input_value) == self.num_layers, (
+                    "List input for " + input_key + " must have length " + str(self.num_layers)
+                )
+
+            # Hyperopt converts all iterable parameters to tuples,
+            # so need to do some corrections and error checking here
+            elif isinstance(input_value, tuple) and input_dict["use_hyperopt"]:
+
+                # the input is expected to be a tuple
+                if isinstance(dtype, tuple):
+                    if input_key in self.hyperopt_param_names:
+                        assert not (len(input_value) == self.num_layers), "Broken edge case"
+                        params[input_key] = [input_value] * self.num_layers
+                    else:
+                        assert len(input_value) == self.num_layers, (
+                            "List input for " + input_key + " must have length " + str(self.num_layers)
+                        )
+                        params[input_key] = list(input_value)
+
+                # this was input as a list and Hyperopt converted it to a tuple, convert back
+                else:
+                    if isinstance(dtype, list):
+                        assert not (len(input_value) == self.num_layers), "Broken edge case"
+                        params[input_key] = [list(input_value)] * self.num_layers
+                    else:
+                        assert len(input_value) == self.num_layers, (
+                            "List input for " + input_key + " must have length " + str(self.num_layers)
+                        )
+                        params[input_key] = list(input_value)
+
+            # expand input to number of layers
+            else:
+                params[input_key] = [input_value] * self.num_layers
 
         for layer_idx in range(self.num_layers):
             layer_dict = {}
             for input_key in self.input_keys:
-                param_name = input_key[self.len_prefix + 1:]
+                if input_key.endswith("_expr"):
+                    continue
+                param_name = input_key[self.len_prefix + 1 :]
                 layer_dict[param_name] = params[input_key][layer_idx]
             self.layer_params_list.append(layer_dict)
-                
 
     def assemble(self, input_dict, params, input_shape, batch_size=None):
 
@@ -126,7 +102,6 @@ class MLModel():
         self.layer_list.append(self.mllib.get_input_layer(input_shape, batch_size=batch_size, name="input_0"))
         self.num_layers += 1
 
-        input_count = 1
         conv_count, trans_conv_count = 0, 0
         dense_count = 0
         reshape_count, flatten_count = 0, 0
@@ -140,8 +115,8 @@ class MLModel():
             layer_input_idx = layer_dict["layer_input_idx"]
             # handle situations where layer is silently added (e.g. flatten for dense layer)
             if layer_input_idx != -1:
-                layer_input_idx -= self.addtl_layers
-            layer_input = self.layer_list[layer_input_idx] 
+                layer_input_idx -= self.num_addtl_layers
+            layer_input = self.layer_list[layer_input_idx]
 
             # TODO: add input layer capabilities
 
@@ -172,7 +147,9 @@ class MLModel():
             # transpose convolution layer
             elif layer_type == "trans_conv":
                 dims = self.mllib.get_tensor_dims(layer_input) - 2  # ignore batch and channel dimensions
-                assert dims > 0, "Input to transpose convolution must have rank greater than 2. Did you forget a reshape layer?"
+                assert (
+                    dims > 0
+                ), "Input to transpose convolution must have rank greater than 2. Did you forget a reshape layer?"
                 layer_output = self.mllib.get_trans_conv_layer(
                     layer_input,
                     dims,
@@ -220,18 +197,13 @@ class MLModel():
             # reshape layer
             elif layer_type == "reshape":
                 layer_output = self.mllib.get_reshape_layer(
-                    layer_input,
-                    layer_dict["target_shape"],
-                    name="reshape_" + str(reshape_count),
+                    layer_input, layer_dict["target_shape"], name="reshape_" + str(reshape_count),
                 )
                 reshape_count += 1
 
             # flatten layer
             elif layer_type == "flatten":
-                layer_output = self.mllib.get_flatten_layer(
-                    layer_input,
-                    name="flatten_" + str(flatten_count),
-                )
+                layer_output = self.mllib.get_flatten_layer(layer_input, name="flatten_" + str(flatten_count),)
                 flatten_count += 1
 
             else:
@@ -245,5 +217,4 @@ class MLModel():
             self.layer_params_list.insert(layer_idx, "addtl_layer")
 
         # finalize model object
-        self.model_obj = self.mllib.build_model_obj(self.layer_list)        
-
+        self.model_obj = self.mllib.build_model_obj(self.layer_list)

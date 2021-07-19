@@ -2,16 +2,15 @@ from time import sleep
 
 from ae_rom_training.ml_model.ml_model import MLModel
 
+
 class Decoder(MLModel):
+    def __init__(self, param_prefix, mllib):
 
-    def __init__(self, param_prefix, input_dict, param_space, mllib):
-
-        super().__init__(param_prefix, input_dict, param_space, mllib)
-
+        super().__init__(param_prefix, mllib)
 
     def mirror_encoder(self, encoder, input_dict):
         """Build parameter space by mirroring encoder."""
-        
+
         encoder_layer_types = self.mllib.get_model_layer_type_list(encoder.model_obj)
 
         # reverse order of layer definitions
@@ -19,10 +18,12 @@ class Decoder(MLModel):
         self.num_layers = len(self.layer_params_list)
 
         for decoder_layer_idx, layer_dict in enumerate(self.layer_params_list):
-            
+
             encoder_layer_idx = encoder.num_layers - decoder_layer_idx - 1
             encoder_layer_type = encoder_layer_types[encoder_layer_idx]
-            encoder_layer_input_shape, encoder_layer_output_shape = self.mllib.get_layer_io_shape(encoder.model_obj, encoder_layer_idx)
+            encoder_layer_input_shape, encoder_layer_output_shape = self.mllib.get_layer_io_shape(
+                encoder.model_obj, encoder_layer_idx
+            )
 
             # convert convolutions to transpose convolutions
             # strides stay the same, but number of filters taken from input shape of original layer

@@ -80,7 +80,7 @@ class TFKerasLibrary(MLLibrary):
             act_reg = self.get_regularization(act_reg, act_reg_val)
         if bias_reg is not None:
             bias_reg = self.get_regularization(bias_reg, bias_reg_val)
-        
+
         if network_order == "NCHW":
             data_format = "channels_first"
         elif network_order == "NHWC":
@@ -167,7 +167,7 @@ class TFKerasLibrary(MLLibrary):
             act_reg = self.get_regularization(act_reg, act_reg_val)
         if bias_reg is not None:
             bias_reg = self.get_regularization(bias_reg, bias_reg_val)
-        
+
         if network_order == "NCHW":
             data_format = "channels_first"
         elif network_order == "NHWC":
@@ -271,7 +271,7 @@ class TFKerasLibrary(MLLibrary):
             bias_initializer=bias_init,
             name=name,
         )(layer_input)
-    
+
         return layer_output, added_flatten
 
     def get_reshape_layer(self, layer_input, target_shape, name=None):
@@ -309,7 +309,7 @@ class TFKerasLibrary(MLLibrary):
 
     def transfer_weights(self, model1, model2):
         """Transfer weights from one network to another.
-        
+
         Useful for building explicit-batch network from trained implicit-batch network
         """
 
@@ -364,11 +364,11 @@ class TFKerasLibrary(MLLibrary):
                 type_list.append("flatten")
             elif layer_type == "Reshape":
                 type_list.append("reshape")
-            
+
         return type_list
 
     def get_optimizer(self, optimizer_name, params):
-        
+
         if optimizer_name == "Adam":
             return Adam(learning_rate=params["learn_rate"])
         else:
@@ -384,7 +384,7 @@ class TFKerasLibrary(MLLibrary):
             return loss_name  # assumed to be a built-in loss string
 
     def get_options(self, input_dict, params):
-        
+
         callback_list = []
         added_callback = False
 
@@ -392,7 +392,6 @@ class TFKerasLibrary(MLLibrary):
             early_stop = EarlyStopping(patience=int(params["es_patience"]), restore_best_weights=True)
             callback_list.append(early_stop)
             added_callback = True
-
 
         options = {}
         if added_callback:
@@ -406,7 +405,9 @@ class TFKerasLibrary(MLLibrary):
 
         model_obj.compile(optimizer=optimizer, loss=loss)
 
-    def train_model(self, model_obj, params, data_input_train, data_output_train, data_input_val, data_output_val, options):
+    def train_model(
+        self, model_obj, params, data_input_train, data_output_train, data_input_val, data_output_val, options
+    ):
 
         if TRAIN_VERBOSITY == "none":
             verbose = 0
@@ -434,7 +435,7 @@ class TFKerasLibrary(MLLibrary):
 
     def save_model(self, model_obj, save_path, save_h5=True):
         """Save Tensorflow model object.
-        
+
         save_path should NOT have a file extension, as this is appended based on save_h5.
         """
 

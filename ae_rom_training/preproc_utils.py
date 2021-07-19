@@ -2,11 +2,8 @@ import re
 import os
 
 import numpy as np
-# from sklearn.model_selection import train_test_split
-# from hyperopt import hp, tpe, rand
-# from hyperopt.pyll import scope
-
-import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from hyperopt import tpe, rand
 
 from ae_rom_training.constants import RANDOM_SEED
 
@@ -75,7 +72,7 @@ def catch_input(in_dict, in_key, default_val):
 
 def read_input_file(input_file):
     """Read text input file for fixed parameters.
-    
+
     This reads every input parameter from input_file and does some manual checking for FIXED parameters.
     Network parameters are checked when the autoencoders are initialized.
     Variable training parameters are checked right before training.
@@ -131,7 +128,9 @@ def read_input_file(input_file):
     input_dict["centering_scheme"] = input_dict_raw["centering_scheme"]
     input_dict["normal_scheme"] = input_dict_raw["normal_scheme"]
     input_dict["val_perc"] = input_dict_raw["val_perc"]
-    input_dict["precision"] = catch_input(input_dict_raw, "precision", "32")  # string because "mixed" will be an option later
+    input_dict["precision"] = catch_input(
+        input_dict_raw, "precision", "32"
+    )  # string because "mixed" will be an option later
     input_dict["early_stopping"] = catch_input(input_dict_raw, "early_stopping", False)
     input_dict["mirrored_decoder"] = catch_input(input_dict_raw, "mirrored_decoder", False)
 
@@ -140,20 +139,19 @@ def read_input_file(input_file):
     input_dict["hyperopt_algo"] = catch_input(input_dict_raw, "hyperopt_algo", "tpe")
     input_dict["hyperopt_max_evals"] = catch_input(input_dict_raw, "hyperopt_max_evals", 100)
     if input_dict["use_hyperopt"]:
-        raise ValueError("HyperOpt out of commission")
-        # if input_dict["hyperopt_algo"] == "rand":
-        #     input_dict["hyperopt_algo"] = rand.suggest
-        # elif input_dict["hyperopt_algo"] == "tpe":
-        #     input_dict["hyperopt_algo"] = tpe.suggest
-        # else:
-        #     raise ValueError("Invalid input for hyperopt_algo: " + str(input_dict["hyperopt_algo"]))
+        if input_dict["hyperopt_algo"] == "rand":
+            input_dict["hyperopt_algo"] = rand.suggest
+        elif input_dict["hyperopt_algo"] == "tpe":
+            input_dict["hyperopt_algo"] = tpe.suggest
+        else:
+            raise ValueError("Invalid input for hyperopt_algo: " + str(input_dict["hyperopt_algo"]))
 
     return input_dict
 
 
 def get_vars_from_data(data_list, var_idxs):
     """Retrieve data subarray for specified variables
-    
+
     Assumes structured data in NCHW format.
     """
 
@@ -218,7 +216,7 @@ def get_train_val_data(input_dict):
             input_dict["normal_scheme"],
             input_dict["model_dir"],
             input_dict["network_suffixes"][net_idx],
-            data_list_val = data_list_var_val,
+            data_list_val=data_list_var_val,
             val_perc=input_dict["val_perc"],
         )
 
@@ -238,9 +236,10 @@ def get_train_val_data(input_dict):
 
     return data_list_train, data_list_val
 
+
 def agg_data_sets(data_dir, data_loc_list, idx_start_list, idx_end_list, idx_skip_list, data_order):
     """Given list of data locations, aggregate data sets.
-    
+
     Puts all data in NCHW format.
     """
 
@@ -328,11 +327,7 @@ def preproc_raw_data(
         # concatenate samples after centering
         for dataset_num, data_arr in enumerate(data_list_train):
             data_in = center_data_set(data_arr, centering_scheme, model_dir, network_suffix, save_cent=True)
-            # data_in_train, data_in_val = train_test_split(data_in, test_size=val_perc, random_state=RANDOM_SEED)
-            num_samps_train = int(data_in.shape[0] * (1 - val_perc))
-            data_in_train = data_in[:num_samps_train, :, :]
-            data_in_val = data_in[num_samps_train:, :, :]
-            print("WARNING: train_test_split is NOT being used!")
+            data_in_train, data_in_val = train_test_split(data_in, test_size=val_perc, random_state=RANDOM_SEED)
             if dataset_num == 0:
                 data_train = data_in_train.copy()
                 data_val = data_in_val.copy()
@@ -398,7 +393,7 @@ def center_data_set(data, cent_type, model_dir, network_suffix, save_cent=False)
     if save_cent:
 
         cent_prof = np.squeeze(cent_prof, axis=0)
-        np.save(os.path.join(model_dir, "cent_prof_temp" + network_suffix + ".npy"), cent_prof)
+        np.save(os.path.join(model_dir, "cent_prof" + network_suffix + ".npy"), cent_prof)
 
     return data
 
@@ -463,51 +458,10 @@ def normalize_data_set(data, save_cent, model_dir, network_suffix, norms=None, s
         norm_sub = np.squeeze(norm_sub, axis=0)
         norm_fac = np.squeeze(norm_fac, axis=0)
 
-        np.save(os.path.join(model_dir, "norm_sub_prof_temp" + network_suffix + ".npy"), norm_sub)
-        np.save(os.path.join(model_dir, "norm_fac_prof_temp" + network_suffix + ".npy"), norm_fac)
+        np.save(os.path.join(model_dir, "norm_sub_prof" + network_suffix + ".npy"), norm_sub)
+        np.save(os.path.join(model_dir, "norm_fac_prof" + network_suffix + ".npy"), norm_fac)
 
     return data, norm_sub, norm_fac
-
-
-def get_hp_expression(parameter_name, expression_type, input_list: list):
-    """Generate HyperOpt expression.
-
-    Does some basic error checking for various HyperOpt expressions.
-    input_list has different interpretation depending on expression_type.
-
-    Args:
-        parameter_name: name of hyperparameter to generate a HyperOpt expression for.
-        expression_type: HyperOpt expression type, e.g. "choice", "uniform", "loguniform", etc.
-        input_list: list of parameters required to define a given expression, different for each expression_type.
-
-    Returns:
-        HyperOpt expression for parameter_name defined by expression_type and entries of input_list.
-    """
-
-    if expression_type == "choice":
-        expression = hp.choice(parameter_name, input_list)
-    elif expression_type == "uniform":
-        assert len(input_list) == 2, "uniform expression only accepts 2 inputs (" + parameter_name + ")"
-        expression = hp.uniform(parameter_name, input_list[0], input_list[1])
-    elif expression_type == "uniformint":
-        assert len(input_list) == 2, "uniformint expression only accepts 2 inputs (" + parameter_name + ")"
-        expression = hp.uniformint(parameter_name, input_list[0], input_list[1])
-    elif expression_type == "quniform":
-        assert len(input_list) == 3, "quniform expression only accepts 3 inputs (" + parameter_name + ")"
-        expression = hp.quniform(parameter_name, input_list[0], input_list[1], input_list[2])
-    elif expression_type == "quniformint":
-        assert len(input_list) == 3, "quniformint expression only accepts 3 inputs (" + parameter_name + ")"
-        expression = scope.int(hp.quniform(parameter_name, input_list[0], input_list[1], input_list[2]))
-    elif expression_type == "loguniform":
-        assert len(input_list) == 2, "loguniform expression only accepts 2 inputs (" + parameter_name + ")"
-        expression = hp.loguniform(parameter_name, input_list[0], input_list[1])
-    elif expression_type == "qloguniform":
-        assert len(input_list) == 3, "qloguniform expression only accepts 3 inputs (" + parameter_name + ")"
-        expression = hp.qloguniform(parameter_name, input_list[0], input_list[1], input_list[2])
-    else:
-        raise ValueError("Invalid or un-implemented HyperOpt expression_type: " + str(expression_type))
-
-    return expression
 
 
 def get_shape_tuple(shape_var):

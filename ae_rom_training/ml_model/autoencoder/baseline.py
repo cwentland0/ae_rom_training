@@ -4,15 +4,17 @@ from ae_rom_training.ml_model.autoencoder.autoencoder import Autoencoder
 from ae_rom_training.ml_model.encoder import Encoder
 from ae_rom_training.ml_model.decoder import Decoder
 
+
 class BaselineAE(Autoencoder):
     """Simple autoencoder, only encoder and decoder"""
 
     def __init__(self, input_dict, mllib, network_suffix):
 
-        super().__init__(input_dict, mllib, network_suffix)
+        self.encoder = Encoder("encoder", mllib)
+        self.decoder = Decoder("decoder", mllib)
+        self.component_networks = [self.encoder, self.decoder]
 
-        self.encoder = Encoder("encoder", input_dict, self.param_space, mllib)
-        self.decoder = Decoder("decoder", input_dict, self.param_space, mllib)
+        super().__init__(input_dict, mllib, network_suffix)
 
     def build(self, input_dict, params, data_shape, batch_size=None):
 
@@ -31,7 +33,7 @@ class BaselineAE(Autoencoder):
 
     def check_build(self, input_dict, data_shape):
         """Check that autoencoder built ''correctly''
-        
+
         All this can really do is check that the I/O shapes are as expected.
         """
 
@@ -47,7 +49,10 @@ class BaselineAE(Autoencoder):
             "Encoder input shape does not match data shape: " + str(encoder_input_shape) + " vs. " + str(data_shape)
         )
         assert encoder_output_shape == latent_shape, (
-            "Encoder output shape does not match latent shape: " + str(encoder_output_shape) + " vs. " + str(latent_shape)
+            "Encoder output shape does not match latent shape: "
+            + str(encoder_output_shape)
+            + " vs. "
+            + str(latent_shape)
         )
         assert decoder_input_shape == latent_shape, (
             "Decoder input shape does not match latent shape: " + str(decoder_input_shape) + " vs. " + str(latent_shape)
@@ -66,7 +71,7 @@ class BaselineAE(Autoencoder):
         # compile and train
         self.mllib.compile_model(self.model_obj, optimizer, loss)
         self.mllib.train_model(self.model_obj, params, data_train, data_train, data_val, data_val, options)
-        
+
         # report training and validation loss
         loss_train = self.mllib.calc_loss(self.model_obj, data_train, data_train)
         loss_val = self.mllib.calc_loss(self.model_obj, data_val, data_val)

@@ -4,7 +4,7 @@ import argparse
 import pickle
 
 import numpy as np
-# from hyperopt import fmin, Trials, space_eval
+from hyperopt import fmin, Trials, space_eval
 
 from ae_rom_training.constants import RANDOM_SEED
 from ae_rom_training.preproc_utils import read_input_file, get_train_val_data
@@ -57,39 +57,35 @@ def main():
         autoencoder = autoencoder_list[net_idx]
 
         if input_dict["use_hyperopt"]:
-            raise ValueError("HyperOpt Trials not implemented yet")
-            # print("Performing hyper-parameter optimization!")
-            # trials = Trials()
-            # # wrap objective function to pass additional arguments
-            # objective_func_wrapped = partial(
-            #     autoencoder.build_and_train,
-            #     input_dict=input_dict,
-            #     data_train=data_train,
-            #     data_val=data_val,
-            #     network_suffix=net_suff,
-            #     mllib=mllib,
-            # )
 
-            # # find "best" model according to specified hyperparameter optimization algorithm
-            # best = fmin(
-            #     fn=objective_func_wrapped,
-            #     space=autoencoder.param_space,
-            #     algo=input_dict["hyperopt_algo"],
-            #     max_evals=input_dict["hyperopt_max_evals"],
-            #     show_progressbar=False,
-            #     rstate=np.random.RandomState(RANDOM_SEED),
-            #     trials=trials,
-            # )
+            print("Performing hyper-parameter optimization!")
 
-            # # TODO: train the model again on the full dataset with the best hyper-parameters
+            # wrap objective function to pass additional arguments
+            objective_func_wrapped = partial(
+                autoencoder.build_and_train, input_dict=input_dict, data_train=data_train, data_val=data_val,
+            )
 
-            # # save HyperOpt metadata to disk
-            # best_space = space_eval(space, best)
-            # print("Best parameters:")
-            # print(best_space)
-            # f = open(os.path.join(model_dir, "hyperOptTrials" + net_suff + ".pickle"), "wb")
-            # pickle.dump(trials, f)
-            # f.close()
+            # find "best" model according to specified hyperparameter optimization algorithm
+            trials = Trials()
+            best = fmin(
+                fn=objective_func_wrapped,
+                space=autoencoder.param_space,
+                algo=input_dict["hyperopt_algo"],
+                max_evals=input_dict["hyperopt_max_evals"],
+                show_progressbar=False,
+                rstate=np.random.RandomState(RANDOM_SEED),
+                trials=trials,
+            )
+
+            # TODO: train the model again on the full dataset with the best hyper-parameters
+
+            # save HyperOpt metadata to disk
+            best_space = space_eval(autoencoder.param_space, best)
+            print("Best parameters:")
+            print(best_space)
+            f = open(os.path.join(input_dict["model_dir"], "hyper_opt_trials" + net_suff + ".pickle"), "wb")
+            pickle.dump(trials, f)
+            f.close()
 
         else:
             print("Optimizing single architecture...")
@@ -101,31 +97,6 @@ def main():
         pickle.dump(best_space, f)
         f.close()
 
-        # generate explicit batch networks for TensorRT
-        # if output_trt:
-
-        #     # load best model
-        #     encoder = load_model(os.path.join(model_dir, "encoder" + net_suff + ".h5"), compile=False)
-        #     decoder = load_model(os.path.join(model_dir, "decoder" + net_suff + ".h5"), compile=False)
-        #     inputShape = encoder.layers[0].input_shape[0][1:]
-        #     spatial_dims = data_input_train[0].ndim - 2
-
-        #     # save batch size one network
-        #     model_batch_size_one = build_model(best_space, inputShape, spatial_dims, data_format, 1)
-        #     decoder_batch_size_one = model_batch_size_one.layers[-1]
-        #     encoder_batch_size_one = model_batch_size_one.layers[-2]
-        #     decoder_batch_size_one = transfer_weights(decoder, decoder_batch_size_one)
-        #     encoder_batch_size_one = transfer_weights(encoder, encoder_batch_size_one)
-        #     decoder_batch_size_one.save(os.path.join(model_dir, "decoder_batchOne" + net_suff + ".h5"))
-        #     encoder_batch_size_one.save(os.path.join(model_dir, "encoder_batchOne" + net_suff + ".h5"))
-
-        #     # save decoder with batch size equal to latent dimension
-        #     model_batch_jacob_decode = build_model(
-        #         best_space, inputShape, spatial_dims, data_format, best_space["latent_dim"]
-        #     )
-        #     decoder_batch_jacob_decode = model_batch_jacob_decode.layers[-1]
-        #     decoder_batch_jacob_decode = transfer_weights(decoder, decoder_batch_jacob_decode)
-        #     decoder_batch_jacob_decode.save(os.path.join(model_dir, "decoder_batchJacob" + net_suff + ".h5"))
 
 if __name__ == "__main__":
     main()
