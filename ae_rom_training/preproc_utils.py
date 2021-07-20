@@ -128,7 +128,7 @@ def read_input_file(input_file):
     input_dict["centering_scheme"] = input_dict_raw["centering_scheme"]
     input_dict["normal_scheme"] = input_dict_raw["normal_scheme"]
     input_dict["val_perc"] = input_dict_raw["val_perc"]
-    input_dict["training_format"] = input_dict_raw["training_format"]
+    input_dict["training_format"] = catch_input(input_dict_raw, "training_format", "separate")
     input_dict["precision"] = catch_input(
         input_dict_raw, "precision", "32"
     )  # string because "mixed" will be an option later

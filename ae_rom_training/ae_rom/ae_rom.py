@@ -4,9 +4,8 @@ import pickle
 
 from numpy import nan
 from hyperopt import STATUS_OK
-from tensorflow.python import training
 
-from ae_rom_training.constants import TRAIN_PARAM_DICT
+from ae_rom_training.constants import LAYER_PARAM_DICT, TRAIN_PARAM_DICT
 from ae_rom_training.preproc_utils import catch_input
 from ae_rom_training.hyperopt_utils import hp_expression
 
@@ -17,10 +16,10 @@ class AEROM:
     Should always have an encoder and decoder, w/ optional time-stepper and/or parameter predictor.
     """
 
-    def __init__(self, input_dict, mllib, network_suffix, training_format="separate"):
+    def __init__(self, input_dict, mllib, network_suffix):
 
         self.model_dir = input_dict["model_dir"]
-        self.training_format = training_format
+        self.training_format = input_dict["training_format"]
         self.mllib = mllib
         self.network_suffix = network_suffix
         self.param_space = {}
@@ -29,12 +28,12 @@ class AEROM:
         # concatenate component networks
         self.component_networks = self.autoencoder.component_networks.copy()
         if self.time_stepper is not None:
-            self.component_networks.append(self.time_stepper.component_networks.copy())
+            self.component_networks += self.time_stepper.component_networks.copy()
 
         self.preproc_inputs(input_dict)
 
     def preproc_inputs(self, input_dict):
-        """Set up parameter space for training inputs.
+        """Set up parameter space for layer and training inputs.
 
         For HyperOpt, preprocesses all inputs for component networks into HyperOpt expressions.
         """
@@ -50,91 +49,129 @@ class AEROM:
                 continue
 
             network.input_keys = [key for key, _ in input_dict.items() if key.startswith(network.param_prefix + "_")]
-            network.num_layers = len(input_dict[network.param_prefix + "_layer_type"])  # excluding input layer
+            layer_types = input_dict[network.param_prefix + "_layer_type"]
+            network.num_layers = len(layer_types)  # excluding input layer
 
-            # network layer inputs
-            for input_key in network.input_keys:
-                input_value = input_dict[input_key]
+            for param_name, param_list in LAYER_PARAM_DICT.items():
 
-                if input_dict["use_hyperopt"]:
+                    input_key = network.param_prefix + "_" + param_name
 
-                    # HyperOpt types are handled by expression definition preproc
-                    if input_key.endswith("_expr"):
-                        continue
-                    expr_key = input_key + "_expr"
-                    if expr_key in network.input_keys:
-                        expr_type = input_dict[expr_key]
+                    # parameter provided by user
+                    if input_key in input_dict:
+                        input_value = input_dict[input_key]
 
-                    # list input
-                    if isinstance(input_value, list):
+                        if input_dict["use_hyperopt"]:
 
-                        # list of lists input
-                        if any([isinstance(elem, list) for elem in input_value]):
-
-                            if all([isinstance(elem, list) for elem in input_value]):
-
-                                # list of Hyperopt expression definitions for each layer
-                                if isinstance(expr_type, list):
-                                    assert len(expr_type) == network.num_layers, (
-                                        "List input for " + expr_key + " must have length " + str(network.num_layers)
-                                    )
-                                    input_values_assign = [
-                                        hp_expression(input_key + str(idx), expr_type[idx], val)
-                                        for idx, val in enumerate(input_value)
-                                    ]
-
-                                # list of fixed layer inputs to be chosen from
-                                else:
-                                    assert all([(len(val) == network.num_layers) for val in input_value]), (
-                                        "Sublists of list input for "
-                                        + expr_key
-                                        + " must have length "
-                                        + str(network.num_layers)
-                                    )
-                                    input_values_assign = hp_expression(input_key, "choice", input_value)
-
-                                network.hyperopt_param_names.append(input_key)
-
-                            else:
-                                raise ValueError("If list parameter contains lists, all elements must be lists.")
-
-                        # single list input
-                        # This defines either a HyperOpt expression or fixed layer inputs
-                        else:
-
-                            # HyperOpt expression definition
+                            # HyperOpt types are handled by expression definition preproc
+                            if input_key.endswith("_expr"):
+                                continue
+                            expr_key = input_key + "_expr"
                             if expr_key in network.input_keys:
-                                input_values_assign = hp_expression(input_key, expr_type, input_value)
-                                network.hyperopt_param_names.append(input_key)
+                                expr_type = input_dict[expr_key]
 
-                            # fixed layer inputs
+                            # list input
+                            if isinstance(input_value, list):
+
+                                # list of lists input
+                                if any([isinstance(elem, list) for elem in input_value]):
+
+                                    if all([isinstance(elem, list) for elem in input_value]):
+
+                                        # list of Hyperopt expression definitions for each layer
+                                        if isinstance(expr_type, list):
+                                            assert len(expr_type) == network.num_layers, (
+                                                "List input for " + expr_key + " must have length " + str(network.num_layers)
+                                            )
+                                            input_values_assign = [
+                                                hp_expression(input_key + str(idx), expr_type[idx], val)
+                                                for idx, val in enumerate(input_value)
+                                            ]
+
+                                        # list of fixed layer inputs to be chosen from
+                                        else:
+                                            assert all([(len(val) == network.num_layers) for val in input_value]), (
+                                                "Sublists of list input for "
+                                                + expr_key
+                                                + " must have length "
+                                                + str(network.num_layers)
+                                            )
+                                            input_values_assign = hp_expression(input_key, "choice", input_value)
+
+                                        network.hyperopt_param_names.append(input_key)
+
+                                    else:
+                                        raise ValueError("If list parameter contains lists, all elements must be lists.")
+
+                                # single list input
+                                # This defines either a HyperOpt expression or fixed layer inputs
+                                else:
+
+                                    # HyperOpt expression definition
+                                    if expr_key in network.input_keys:
+                                        input_values_assign = hp_expression(input_key, expr_type, input_value)
+                                        network.hyperopt_param_names.append(input_key)
+
+                                    # fixed layer inputs
+                                    else:
+                                        assert len(input_value) == network.num_layers, (
+                                            "List input for " + input_key + " must have length " + str(network.num_layers)
+                                        )
+                                        input_values_assign = hp_expression(input_key, "choice", [input_value])
+
+                            # single-value input
                             else:
-                                assert len(input_value) == network.num_layers, (
-                                    "List input for " + input_key + " must have length " + str(network.num_layers)
-                                )
-                                input_values_assign = hp_expression(input_key, "choice", [input_value])
+                                if expr_key in network.input_keys:
+                                    # throw error, even if "choice" is requested it's pointless and confusing
+                                    # TODO: error message
+                                    raise ValueError
+                                else:
+                                    # this will get expanded when building the network
+                                    input_values_assign = hp_expression(input_key, "choice", [input_value])
 
-                    # single-value input
-                    else:
-                        if expr_key in network.input_keys:
-                            # throw error, even if "choice" is requested it's pointless and confusing
-                            # TODO: error message
-                            raise ValueError
+                        # not running HyperOpt
                         else:
-                            # this will get expanded when building the network
-                            input_values_assign = hp_expression(input_key, "choice", [input_value])
+                            if isinstance(input_value, list):
+                                if any(isinstance(elem, list) for elem in input_value):
+                                    raise ValueError("If not using HyperOpt, cannot use list of lists inputs for " + input_key)
 
-                # not running HyperOpt
-                else:
-                    if isinstance(input_value, list):
-                        if any(isinstance(elem, list) for elem in input_value):
-                            raise ValueError("If not using HyperOpt, cannot use list of lists inputs for " + input_key)
+                            # list length checking happens later
+                            input_values_assign = input_value
 
-                    # list length checking happens later
-                    input_values_assign = input_value
+                    # if not provided by user, try to assign default
+                    else:
+                        default = param_list[1]
+                        # ignore parameters without defaults if their necessitating layers aren't in the network
+                        if ("dense" not in layer_types) and (
+                            param_name in ["output_shape"]):
+                                continue
 
-                # assign completed list
-                self.param_space[input_key] = input_values_assign
+                        elif ("conv" not in layer_types) and ("trans_conv" not in layer_types) and (
+                            param_name in ["num_filters", "kern_size", "dilation", "strides"]):
+                                continue
+
+                        elif ("reshape" not in layer_types) and (
+                            param_name in ["target_shape"]):
+                                continue
+
+                        # no default exists and is required
+                        elif default is nan:
+                            breakpoint()
+                            raise ValueError("Input "
+                            + input_key
+                            + " has no default and must be provided. If your model doesn't need it, just provide a dummy value for now.")
+
+                        # a default exists
+                        else:
+                            if input_dict["use_hyperopt"]:
+                                input_values_assign = hp_expression(input_key, "choice", [default])
+                            else:
+                                input_values_assign = default
+                            
+                            # add parameter to input keys
+                            network.input_keys.append(input_key)
+
+                    # assign completed list
+                    self.param_space[input_key] = input_values_assign
 
         # training parameters
         # have to get separate training parameters if doing separate time-stepper training
@@ -219,14 +256,44 @@ class AEROM:
 
         # build autoencoder
         data_shape = data_train.shape[1:]
-        self.model = self.autoencoder.build(
-            input_dict, params, data_shape, batch_size=None
-        )  # must be implicit batch for training
+        self.autoencoder.build(input_dict, params, data_shape, batch_size=None)  # must be implicit batch for training
         self.autoencoder.check_build(input_dict, data_shape)
 
         # train autoencoder
         time_start = time()
         loss_train, loss_val = self.autoencoder.train(input_dict, params, data_train, data_val)
+        eval_time = time() - time_start
+
+        # check if this model is the best so far, if so save
+        self.check_best(input_dict, loss_val, params)
+
+        # return optimization info dictionary
+        return {
+            "loss": loss_train,  # training loss at end of training
+            "true_loss": loss_val,  # validation loss at end of training
+            "status": STATUS_OK,  # check for correct exit
+            "eval_time": eval_time,  # time (in seconds) to train model
+        }
+
+    def build_and_train_ae_ts(self, params, input_dict, data_train, data_val):
+        """Build and train autoencoder and time-stepper together.
+        
+        Acts as objective function for HyperOpt, or normal training function without HyperOpt.
+        """
+
+        # build autoencoder
+        data_shape = data_train.shape[1:]
+        self.autoencoder.build(input_dict, params, data_shape, batch_size=None)  # must be implicit batch for training
+        self.autoencoder.check_build(input_dict, data_shape)
+
+        # build time stepper
+        self.time_stepper.build(input_dict, params, batch_size=None)
+        self.time_stepper.check_build(input_dict)
+
+        breakpoint()
+        # train autoencoder
+        time_start = time()
+        loss_train, loss_val = self.train_ae_ts(input_dict, params, data_train, data_val)
         eval_time = time() - time_start
 
         # check if this model is the best so far, if so save

@@ -8,7 +8,7 @@ class BaselineAE(Autoencoder):
 
         super().__init__(mllib)
 
-        # no extra networks are added
+        # no extra networks are added to component_networks
 
     def build(self, input_dict, params, data_shape, batch_size=None):
 

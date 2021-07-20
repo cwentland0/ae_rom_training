@@ -10,12 +10,14 @@ from ae_rom_training.constants import RANDOM_SEED
 from ae_rom_training.preproc_utils import read_input_file, get_train_val_data
 from ae_rom_training.ml_library import get_ml_library
 from ae_rom_training.ae_rom.baseline_ae_rom import BaselineAEROM
+from ae_rom_training.ae_rom.koopman_ae_otto2019 import KoopmanAEOtto2019
 
 np.random.seed(RANDOM_SEED)  # seed NumPy RNG
 
 # TODO: detect if a component has no Hyperopt expressions, don't use Hyperopt
 # TODO: load trained autoencoder for separate training of time-stepper
 # TODO: define layer precision
+# TODO: dry run option to display ALL layer parameters so user can verify before training
 
 
 def main():
@@ -43,12 +45,15 @@ def main():
     data_train_list, data_val_list = get_train_val_data(input_dict)
 
     # initialize all autoencoders
+    # TODO: move this junk somewhere else
     aerom_list = []
     aerom_type = input_dict["aerom_type"]
     for net_idx in range(input_dict["num_networks"]):
         net_suff = input_dict["network_suffixes"][net_idx]
         if aerom_type == "baseline":
             aerom_list.append(BaselineAEROM(input_dict, mllib, net_suff))
+        elif aerom_type == "koopman_otto2019":
+            aerom_list.append(KoopmanAEOtto2019(input_dict, mllib, network_suffix))
         else:
             raise ValueError("Invalid aerom_type selection: " + str(aerom_type))
 
@@ -94,12 +99,18 @@ def main():
         else:
             print("Optimizing single architecture...")
 
-            # train autoencoder alone (if required)
+            # train autoencoder alone
             if (aerom.time_stepper is None) or (
                 (aerom.time_stepper is not None) and (aerom.training_format == "separate")
             ):
                 best = aerom.build_and_train_ae(aerom.param_space, input_dict, data_train, data_val)
+
+            # train autoencoder and time stepper together
+            elif (aerom.time_stepper is not None) and (aerom.training_format == "combined"):
+                best = aerom.build_and_train_ae_ts(aerom.param_space, input_dict, data_train, data_val)
             best_space = aerom.param_space
+
+            
 
         # write parameters to file
         f = open(os.path.join(input_dict["model_dir"], "best_params" + net_suff + ".pickle"), "wb")

@@ -48,6 +48,7 @@ class Autoencoder:
 
         # check shapes
         latent_shape = (input_dict["latent_dim"],)
+
         assert encoder_input_shape == data_shape, (
             "Encoder input shape does not match data shape: " + str(encoder_input_shape) + " vs. " + str(data_shape)
         )
@@ -57,12 +58,15 @@ class Autoencoder:
             + " vs. "
             + str(latent_shape)
         )
+        print("ENCODER passed I/O checks!")
+
         assert decoder_input_shape == latent_shape, (
             "Decoder input shape does not match latent shape: " + str(decoder_input_shape) + " vs. " + str(latent_shape)
         )
         assert decoder_output_shape == data_shape, (
             "Decoder output shape does not match data shape: " + str(decoder_output_shape) + " vs. " + str(data_shape)
         )
+        print("DECODER passed I/O checks!")
 
     def train(self, input_dict, params, data_train, data_val):
         """Trains the autoencoder alone.

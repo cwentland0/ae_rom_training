@@ -1,22 +1,28 @@
 from ae_rom_training.ml_model.ml_model import MLModel
 
-# TODO:
-# 1) Initialize Koopman with DMD Koopman
-# 2) 
 
 class Koopman(MLModel):
-    """Model defining a linear Koopman operator.
+    """Linear Koopman operator.
     
-    May be a linear or discrete Koopman.
+    Extremely simple, just a single linear dense layer with zero bias, no regularization.
     """
 
-    def __init__(self, param_prefix, input_dict, param_space, mllib):
+    def __init__(self, param_prefix, input_dict, mllib):
 
-        super().__init__(param_prefix, input_dict, param_space, mllib)
+        input_dict[param_prefix + "_layer_type"] = ["dense"]
+        input_dict[param_prefix + "_layer_input_idx"] = [-1]
+        input_dict[param_prefix + "_use_bias"] = False
+        input_dict[param_prefix + "_activation"] = "linear"
+        input_dict[param_prefix + "_kern_reg"] = None
+        input_dict[param_prefix + "_kern_reg_val"] = 0.0
+        input_dict[param_prefix + "_act_reg"] = None
+        input_dict[param_prefix + "_act_reg_val"] = 0.0
+        input_dict[param_prefix + "_bias_reg"] = None 
+        input_dict[param_prefix + "_bias_reg_val"] = 0.0
+        input_dict[param_prefix + "_kern_init"] = None
+        input_dict[param_prefix + "_bias_init"] = None
+        input_dict[param_prefix + "_output_size"] = input_dict["latent_dim"] 
 
+        super().__init__(param_prefix, mllib)
 
-    def calc_discrete_koopman(self):
-        pass
-
-    def calc_continuous_koopman(self):
-        pass
+    # def get_
