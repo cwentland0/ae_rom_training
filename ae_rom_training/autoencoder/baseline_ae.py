@@ -37,9 +37,9 @@ class BaselineAE(Autoencoder):
 
         return loss_train, loss_val
 
-    def save(self, model_dir):
+    def save(self, model_dir, network_suffix):
         """Save autoencoder component networks."""
 
-        super().save(model_dir)
+        super().save(model_dir, network_suffix)
 
         # nothing else to save besides encoder and decoder

@@ -10,11 +10,10 @@ from tensorflow.keras.layers import Flatten, Reshape
 from tensorflow.keras.regularizers import l1, l2
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
-from tensorflow.keras.losses import MeanSquaredError
-import tensorflow.keras.backend as K
 
 from ae_rom_training.constants import RANDOM_SEED, TRAIN_VERBOSITY
 from ae_rom_training.ml_library.ml_library import MLLibrary
+from ae_rom_training.ml_library.tfkeras.tfkeras_losses import pure_l2, pure_mse, AETSCombinedLoss
 from ae_rom_training.preproc_utils import get_shape_tuple
 
 
@@ -296,7 +295,6 @@ class TFKerasLibrary(MLLibrary):
         output_layer = Flatten(name=name)(layer_input)
         return output_layer
 
-    # return regularizer objects
     def get_regularization(self, reg_name, reg_val):
 
         if reg_name == "l2":
@@ -305,17 +303,6 @@ class TFKerasLibrary(MLLibrary):
             return l1(reg_val)
         else:
             raise ValueError("Invalid regularization name: " + str(reg_name))
-
-    def pure_l2(self, y_true, y_pred):
-        """Strict L2 error"""
-
-        return K.sum(K.square(y_true - y_pred))
-
-    def pure_mse(self, y_true, y_pred):
-        """Strict mean-squared error, not including regularization contribution"""
-
-        mse = MeanSquaredError()
-        return mse(y_true, y_pred)
 
     def transfer_weights(self, model1, model2):
         """Transfer weights from one network to another.
@@ -377,28 +364,39 @@ class TFKerasLibrary(MLLibrary):
 
         return type_list
 
-    def get_optimizer(self, optimizer_name, learn_rate=None):
+    def get_optimizer(self, params, input_dict, param_prefix=""):
 
+        optimizer_name = input_dict[param_prefix + "optimizer"]
         if optimizer_name == "Adam":
-            return Adam(learning_rate=learn_rate)
+            return Adam(learning_rate=params[param_prefix + "learn_rate"])
         else:
             raise ValueError("Invalid regularization name: " + str(optimizer_name))
 
-    def get_loss_function(self, loss_name):
+    def get_loss_function(self, params, input_dict, param_prefix=""):
 
+        loss_name = params[param_prefix + "loss_func"]
         if loss_name == "pure_l2":
-            return self.pure_l2
+            return pure_l2
         elif loss_name == "pure_mse":
-            return self.pure_mse
+            return pure_mse
+        elif loss_name == "at_ts_combined":
+            return AETSCombinedLoss(
+                normalize=params[param_prefix + "normalize"],
+                eps=params[param_prefix + "eps"],
+                alpha=params[param_prefix + "alpha"],
+                beta=params[param_prefix + "beta"],
+            )
         else:
             return loss_name  # assumed to be a built-in loss string
 
-    def get_options(self, early_stopping=False, es_patience=None):
+    def get_options(self, params, input_dict, param_prefix=""):
 
         callback_list = []
         added_callback = False
 
-        if early_stopping:
+        # early stopping
+        if params[param_prefix + "early_stopping"]:
+            es_patience = params[param_prefix + "es_patience"]
             early_stop = EarlyStopping(patience=int(es_patience), restore_best_weights=True)
             callback_list.append(early_stop)
             added_callback = True
@@ -411,20 +409,19 @@ class TFKerasLibrary(MLLibrary):
 
         return options
 
-    def compile_model(self, model_obj, optimizer, loss):
-
-        model_obj.compile(optimizer=optimizer, loss=loss)
-
-    def train_model(
+    def train_model_builtin(
         self,
         model_obj,
-        batch_size,
-        max_epochs,
         data_input_train,
         data_output_train,
         data_input_val,
         data_output_val,
+        optimizer,
+        loss,
         options,
+        input_dict,
+        params,
+        param_prefix,
     ):
 
         if TRAIN_VERBOSITY == "none":
@@ -436,6 +433,10 @@ class TFKerasLibrary(MLLibrary):
         else:
             raise ValueError("Invalid entry for TRAIN_VERBOSITY: " + str(TRAIN_VERBOSITY))
 
+        model_obj.compile(optimizer=optimizer, loss=loss)
+
+        batch_size = params[param_prefix + "batch_size"]
+        max_epochs = params[param_prefix + "max_epochs"]
         model_obj.fit(
             x=data_input_train,
             y=data_output_train,

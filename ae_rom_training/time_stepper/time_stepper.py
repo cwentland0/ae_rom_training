@@ -1,5 +1,3 @@
-
-
 class TimeStepper:
     """Base class for time stepper models.
     
@@ -8,6 +6,5 @@ class TimeStepper:
     """
 
     def __init__(self, mllib):
-        
-        self.mllib = mllib
 
+        self.mllib = mllib

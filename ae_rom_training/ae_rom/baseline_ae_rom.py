@@ -11,3 +11,15 @@ class BaselineAEROM(AEROM):
         self.time_stepper = None
 
         super().__init__(input_dict, mllib, network_suffix)
+
+        self.train_builtin = True
+
+    def build(self):
+        """Assemble singular model object for entire network, if possible"""
+
+        self.model_obj = self.autoencoder.model_obj
+
+    def save(self, model_dir):
+        """Same individual networks in AE ROM"""
+
+        self.autoencoder.save(model_dir, self.network_suffix)

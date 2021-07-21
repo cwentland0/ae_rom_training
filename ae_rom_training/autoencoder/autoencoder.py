@@ -68,55 +68,14 @@ class Autoencoder:
         )
         print("DECODER passed I/O checks!")
 
-    def train(self, input_dict, params, data_train, data_val):
-        """Trains the autoencoder alone.
-        
-        Child class implementations should return losses and pull out trained component networks.
-        """
-
-        # get training parameters
-        loss = self.mllib.get_loss_function(input_dict["ae_loss_func"])
-        optimizer = self.mllib.get_optimizer(input_dict["ae_optimizer"], learn_rate=params["ae_learn_rate"])
-
-        # TODO: this is kind of jank
-        if "ae_early_stopping" in input_dict:
-            early_stopping = input_dict["ae_early_stopping"]
-            if input_dict["ae_early_stopping"]:
-                es_patience = input_dict["ae_es_patience"]
-            else:
-                es_patience = None
-        else:
-            early_stopping = False
-            es_patience = None
-        options = self.mllib.get_options(early_stopping, es_patience)
-
-        # compile and train
-        self.mllib.compile_model(self.model_obj, optimizer, loss)
-        self.mllib.train_model(
-            self.model_obj,
-            params["ae_batch_size"],
-            params["ae_max_epochs"],
-            data_train,
-            data_train,
-            data_val,
-            data_val,
-            options,
-        )
-
-        # report training and validation loss
-        loss_train = self.mllib.calc_loss(self.model_obj, data_train, data_train)
-        loss_val = self.mllib.calc_loss(self.model_obj, data_val, data_val)
-
-        return loss_train, loss_val
-
-    def save(self, model_dir):
+    def save(self, model_dir, network_suffix):
         """Save encoder and decoder models.
         
         Child class implementations should save any additional component network models.
         """
 
-        encoder_path = os.path.join(model_dir, "encoder" + self.network_suffix)
+        encoder_path = os.path.join(model_dir, "encoder" + network_suffix)
         self.mllib.save_model(self.encoder.model_obj, encoder_path)
 
-        decoder_path = os.path.join(model_dir, "decoder" + self.network_suffix)
+        decoder_path = os.path.join(model_dir, "decoder" + network_suffix)
         self.mllib.save_model(self.decoder.model_obj, decoder_path)

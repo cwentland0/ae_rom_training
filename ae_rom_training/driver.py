@@ -110,8 +110,6 @@ def main():
                 best = aerom.build_and_train_ae_ts(aerom.param_space, input_dict, data_train, data_val)
             best_space = aerom.param_space
 
-            
-
         # write parameters to file
         f = open(os.path.join(input_dict["model_dir"], "best_params" + net_suff + ".pickle"), "wb")
         pickle.dump(best_space, f)

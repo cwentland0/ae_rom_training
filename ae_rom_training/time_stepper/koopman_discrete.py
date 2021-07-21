@@ -3,6 +3,7 @@ import numpy as np
 from ae_rom_training.time_stepper.time_stepper import TimeStepper
 from ae_rom_training.ml_model.koopman import Koopman
 
+
 class KoopmanDiscrete(TimeStepper):
     """Model defining a discrete Koopman operator."""
 
@@ -37,7 +38,7 @@ class KoopmanDiscrete(TimeStepper):
         pass
 
     def extract_operator(self):
-        """Extract linear operator from network.""" 
+        """Extract linear operator from network."""
 
         pass
 
@@ -54,7 +55,6 @@ class KoopmanDiscrete(TimeStepper):
         self.mllib.display_model_summary(self.stepper.model_obj, displaystr="KOOPMAN")
 
         self.model_obj = self.stepper.model_obj
-        
 
     def check_build(self, input_dict):
         """Check that Koopman built ''correctly''

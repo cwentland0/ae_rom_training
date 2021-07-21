@@ -10,7 +10,7 @@ except ImportError:
     TFKERAS_IMPORT_SUCCESS = False
 
 if TFKERAS_IMPORT_SUCCESS:
-    from ae_rom_training.ml_library.tfkeras_library import TFKerasLibrary
+    from ae_rom_training.ml_library.tfkeras.tfkeras_library import TFKerasLibrary
 
 # PyTorch
 TORCH_IMPORT_SUCCESS = True
@@ -20,7 +20,7 @@ except ImportError:
     TORCH_IMPORT_SUCCESS = False
 
 if TORCH_IMPORT_SUCCESS:
-    from ae_rom_training.ml_library.pytorch_library import PyTorchLibrary
+    from ae_rom_training.ml_library.pytorch.pytorch_library import PyTorchLibrary
 
 
 def get_ml_library(input_dict):

@@ -31,7 +31,7 @@ LAYER_PARAM_DICT = {
     "bias_init": [str, "zeros"],  # initial distribution of biases
     "output_size": [int, nan],  # output size for dense layers
     "target_shape": [(int,), nan],  # target shape for reshape layers
-    "use_bias": [bool, True]  # whether to apply bias to a layer's calculations
+    "use_bias": [bool, True],  # whether to apply bias to a layer's calculations
 }
 
 # training parameters
@@ -43,6 +43,7 @@ TRAIN_PARAM_DICT = {
     "early_stopping": [bool, False],  # whether to use early stopping
     "es_patience": [int, nan],  # number of iterations before early-stopping kicks in
     "batch_size": [int, nan],  # batch size
+    "normalize": [bool, False],  # whether to normalize the error contributions in combine AE + TS loss
     "alpha": [float, 0.5],  # weighting factor for autoencoder reconstruction error in combined loss
     "beta": [float, 0.5],  # weighting factor for time-stepper error in combined loss
     "eps": [float, 1e-12],  # additive factor to prevent denominator from becoming zero
