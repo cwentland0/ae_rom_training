@@ -1,7 +1,9 @@
+import numpy as np
 from numpy import nan
 
 RANDOM_SEED = 24
 TRAIN_VERBOSITY = "min"
+FLOAT_TYPE = np.float64
 
 # some reference logarithms for use with HyperOpt
 TENTHOUSANDTH_LOG = -9.21034037  # log(-9.21034037) ~= 0.0001
@@ -43,6 +45,7 @@ TRAIN_PARAM_DICT = {
     "early_stopping": [bool, False],  # whether to use early stopping
     "es_patience": [int, nan],  # number of iterations before early-stopping kicks in
     "batch_size": [int, nan],  # batch size
+    "seq_length": [int, nan],  # length of time series sequence for evaluating time-steppers
     "normalize": [bool, False],  # whether to normalize the error contributions in combine AE + TS loss
     "alpha": [float, 0.5],  # weighting factor for autoencoder reconstruction error in combined loss
     "beta": [float, 0.5],  # weighting factor for time-stepper error in combined loss

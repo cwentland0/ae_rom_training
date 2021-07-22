@@ -25,4 +25,7 @@ class Koopman(MLModel):
 
         super().__init__(param_prefix, mllib)
 
-    # def get_
+    def get_koopman(self):
+        """Retrieve linear operator from model object."""
+
+        return self.mllib.get_layer_weights(self.model_obj, 1, weights=True)

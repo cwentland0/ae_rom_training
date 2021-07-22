@@ -20,6 +20,6 @@ class BaselineAEROM(AEROM):
         self.model_obj = self.autoencoder.model_obj
 
     def save(self, model_dir):
-        """Same individual networks in AE ROM"""
+        """Save individual networks in AE ROM"""
 
         self.autoencoder.save(model_dir, self.network_suffix)

@@ -2,7 +2,10 @@ from ae_rom_training.autoencoder.autoencoder import Autoencoder
 
 
 class BaselineAE(Autoencoder):
-    """Simple autoencoder, only encoder and decoder"""
+    """Standalone autoencoder, only encoder and decoder.
+    
+    The main distinction with parent Autoencoder is the merging of the encoder and decoder for single-model training.
+    """
 
     def __init__(self, mllib):
 

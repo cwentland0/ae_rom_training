@@ -20,6 +20,7 @@ class AEROM:
 
         self.model_dir = input_dict["model_dir"]
         self.training_format = input_dict["training_format"]
+        self.latent_dim = input_dict["latent_dim"]
         self.mllib = mllib
         self.network_suffix = network_suffix
         self.param_space = {}
@@ -161,7 +162,6 @@ class AEROM:
 
                     # no default exists and is required
                     elif default is nan:
-                        breakpoint()
                         raise ValueError(
                             "Input "
                             + input_key
@@ -200,6 +200,10 @@ class AEROM:
                 expr_type = None
                 if expr_key in input_dict:
                     expr_type = input_dict[expr_key]
+
+                if self.time_stepper is None:
+                   if param_name in ["seq_length"]:
+                       continue 
 
                 # has no default
                 if default is nan:
@@ -256,24 +260,40 @@ class AEROM:
 
                     self.param_space[param_key] = param_val
 
-    def build_and_train_ae(self, params, input_dict, data_train, data_val):
-        """Build and train only-autoencoder AE-ROM.
+    def build_and_train(self, params, input_dict, data_train, data_val, ae=False, ts=False):
+        """Build and train network.
 
         Acts as objective function for HyperOpt, or normal training function without HyperOpt.
-        
-        Objective functions for autoencoder-only, time stepper-only, and combined are separated
-        to properly handle Hyperopt Trials.
         """
 
-        # build autoencoder
-        data_shape = data_train.shape[1:]
-        self.autoencoder.build(input_dict, params, data_shape, batch_size=None)
-        self.autoencoder.check_build(input_dict, data_shape)
-        self.build()
+        assert ae or ts, "Must train autoencoder, time-stepper, or both."
 
-        # train autoencoder
+        # build autoencoder
+        if ae:
+            assert self.autoencoder is not None, "Autoencoder not initialized for this model"
+            data_shape = data_train.shape[1:]
+            self.autoencoder.build(input_dict, params, data_shape, batch_size=None)
+            self.autoencoder.check_build(input_dict, data_shape)
+
+        if ts:
+            assert self.time_stepper is not None, "Time stepper not initialized for this model"
+            self.time_stepper.build(input_dict, params, batch_size=None)
+            self.time_stepper.check_build(input_dict)
+
+        self.build()  # finish building
+
+        # prefix for grabbing training parameters
+        if ae:
+            if ts:
+                param_prefix = ""
+            else:
+                param_prefix = "ae_"
+        else:
+            param_prefix = "ts_"
+
+        # train network, finally
         time_start = time()
-        loss_train, loss_val = self.train(input_dict, params, data_train, data_val, param_prefix="ae_")
+        loss_train, loss_val = self.train(input_dict, params, data_train, data_val, param_prefix=param_prefix)
         eval_time = time() - time_start
 
         # check if this model is the best so far, if so save
@@ -287,37 +307,6 @@ class AEROM:
             "eval_time": eval_time,  # time (in seconds) to train model
         }
 
-    # def build_and_train_ae_ts(self, params, input_dict, data_train, data_val):
-    #     """Build and train autoencoder and time-stepper together.
-
-    #     Acts as objective function for HyperOpt, or normal training function without HyperOpt.
-    #     """
-
-    #     # build autoencoder
-    #     data_shape = data_train.shape[1:]
-    #     self.autoencoder.build(input_dict, params, data_shape, batch_size=None)  # must be implicit batch for training
-    #     self.autoencoder.check_build(input_dict, data_shape)
-
-    #     # build time stepper
-    #     self.time_stepper.build(input_dict, params, batch_size=None)
-    #     self.time_stepper.check_build(input_dict)
-
-    #     # train autoencoder
-    #     time_start = time()
-    #     loss_train, loss_val = self.train_ae_ts(input_dict, params, data_train, data_val)
-    #     eval_time = time() - time_start
-
-    #     # check if this model is the best so far, if so save
-    #     self.check_best(input_dict, loss_val, params)
-
-    #     # return optimization info dictionary
-    #     return {
-    #         "loss": loss_train,  # training loss at end of training
-    #         "true_loss": loss_val,  # validation loss at end of training
-    #         "status": STATUS_OK,  # check for correct exit
-    #         "eval_time": eval_time,  # time (in seconds) to train model
-    #     }
-
     def train(self, input_dict, params, data_train, data_val, param_prefix=""):
         """Train the network.
         
@@ -329,13 +318,13 @@ class AEROM:
         """
 
         # get training objects
-        loss = self.mllib.get_loss_function(params, input_dict, param_prefix)
-        optimizer = self.mllib.get_optimizer(params, input_dict, param_prefix)
-        options = self.mllib.get_options(params, input_dict, param_prefix)
+        loss = self.mllib.get_loss_function(params, param_prefix)
+        optimizer = self.mllib.get_optimizer(params, param_prefix)
+        options = self.mllib.get_options(params, param_prefix)
 
-        # train
+        # Built-in training method implemented in ML library
         if self.train_builtin:
-            self.mllib.train_model_builtin(
+            loss_train, loss_val = self.mllib.train_model_builtin(
                 self.model_obj,
                 data_train,
                 data_train,
@@ -344,16 +333,23 @@ class AEROM:
                 optimizer,
                 loss,
                 options,
-                input_dict,
                 params,
                 param_prefix,
             )
-        else:
-            self.mllib.train_model_custom(data_train)
 
-        # report training and validation loss
-        loss_train = self.mllib.calc_loss(self.model_obj, data_train, data_train)
-        loss_val = self.mllib.calc_loss(self.model_obj, data_val, data_val)
+        # Custom training method is implemented by child class
+        else:
+            loss_train, loss_val = self.train_model_custom(
+                data_train,
+                data_train,
+                data_val,
+                data_val,
+                optimizer,
+                loss,
+                options,
+                params,
+                param_prefix,
+            )
 
         return loss_train, loss_val
 

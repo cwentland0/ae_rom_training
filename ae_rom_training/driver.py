@@ -103,11 +103,12 @@ def main():
             if (aerom.time_stepper is None) or (
                 (aerom.time_stepper is not None) and (aerom.training_format == "separate")
             ):
-                best = aerom.build_and_train_ae(aerom.param_space, input_dict, data_train, data_val)
+                best = aerom.build_and_train(aerom.param_space, input_dict, data_train, data_val, ae=True)
 
             # train autoencoder and time stepper together
             elif (aerom.time_stepper is not None) and (aerom.training_format == "combined"):
-                best = aerom.build_and_train_ae_ts(aerom.param_space, input_dict, data_train, data_val)
+                best = aerom.build_and_train(aerom.param_space, input_dict, data_train, data_val, ae=True, ts=True)
+
             best_space = aerom.param_space
 
         # write parameters to file

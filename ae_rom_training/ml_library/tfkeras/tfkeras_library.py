@@ -1,5 +1,7 @@
 import os
+from time import time
 
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras import Input
@@ -10,12 +12,23 @@ from tensorflow.keras.layers import Flatten, Reshape
 from tensorflow.keras.regularizers import l1, l2
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.utils import Progbar
+from tensorflow.python.types.core import Value
 
 from ae_rom_training.constants import RANDOM_SEED, TRAIN_VERBOSITY
 from ae_rom_training.ml_library.ml_library import MLLibrary
-from ae_rom_training.ml_library.tfkeras.tfkeras_losses import pure_l2, pure_mse, AETSCombinedLoss
+from ae_rom_training.ml_library.tfkeras.tfkeras_losses import pure_l2, pure_mse, ae_ts_combined_error
 from ae_rom_training.preproc_utils import get_shape_tuple
 
+
+if TRAIN_VERBOSITY == "none":
+    verbose = 0
+elif TRAIN_VERBOSITY == "min":
+    verbose = 2
+elif TRAIN_VERBOSITY == "max":
+    verbose = 1
+else:
+    raise ValueError("Invalid entry for TRAIN_VERBOSITY: " + str(TRAIN_VERBOSITY))
 
 class TFKerasLibrary(MLLibrary):
     """Functionality for Tensorflow-Keras"""
@@ -313,6 +326,22 @@ class TFKerasLibrary(MLLibrary):
         model2.set_weights(model1.get_weights())
         return model2
 
+    def get_layer_weights(self, model, layer_num, weights=True, bias=False):
+
+        # TODO: this is assuming a lot about the form of the weights,
+        #   not sure if other layers can have other weight orderings
+        #   Might want to check Layer type first and handle accordingly
+
+        if weights:
+            if bias:
+                return model.layers[layer_num].get_weights()
+            else:
+                return model.layers[layer_num].get_weights()[0]
+        elif bias:
+            return model.layers[layer_num].get_weights()[1]
+        else:
+            raise ValueError("Must set either weights=True or bias=True")
+
     def get_tensor_dims(self, tensor):
         return len(tensor.shape.as_list())
 
@@ -364,15 +393,15 @@ class TFKerasLibrary(MLLibrary):
 
         return type_list
 
-    def get_optimizer(self, params, input_dict, param_prefix=""):
+    def get_optimizer(self, params, param_prefix=""):
 
-        optimizer_name = input_dict[param_prefix + "optimizer"]
+        optimizer_name = params[param_prefix + "optimizer"]
         if optimizer_name == "Adam":
             return Adam(learning_rate=params[param_prefix + "learn_rate"])
         else:
             raise ValueError("Invalid regularization name: " + str(optimizer_name))
 
-    def get_loss_function(self, params, input_dict, param_prefix=""):
+    def get_loss_function(self, params, param_prefix=""):
 
         loss_name = params[param_prefix + "loss_func"]
         if loss_name == "pure_l2":
@@ -380,16 +409,11 @@ class TFKerasLibrary(MLLibrary):
         elif loss_name == "pure_mse":
             return pure_mse
         elif loss_name == "at_ts_combined":
-            return AETSCombinedLoss(
-                normalize=params[param_prefix + "normalize"],
-                eps=params[param_prefix + "eps"],
-                alpha=params[param_prefix + "alpha"],
-                beta=params[param_prefix + "beta"],
-            )
+            return ae_ts_combined_error
         else:
             return loss_name  # assumed to be a built-in loss string
 
-    def get_options(self, params, input_dict, param_prefix=""):
+    def get_options(self, params, param_prefix=""):
 
         callback_list = []
         added_callback = False
@@ -419,19 +443,9 @@ class TFKerasLibrary(MLLibrary):
         optimizer,
         loss,
         options,
-        input_dict,
         params,
         param_prefix,
     ):
-
-        if TRAIN_VERBOSITY == "none":
-            verbose = 0
-        elif TRAIN_VERBOSITY == "min":
-            verbose = 2
-        elif TRAIN_VERBOSITY == "max":
-            verbose = 1
-        else:
-            raise ValueError("Invalid entry for TRAIN_VERBOSITY: " + str(TRAIN_VERBOSITY))
 
         model_obj.compile(optimizer=optimizer, loss=loss)
 
@@ -446,6 +460,96 @@ class TFKerasLibrary(MLLibrary):
             verbose=verbose,
             callbacks=options["callbacks"],
         )
+
+        # report training and validation loss
+        loss_train = self.calc_loss(model_obj, data_input_train, data_output_train)
+        loss_val = self.calc_loss(model_obj, data_input_val, data_output_val)
+
+        return loss_train, loss_val
+
+    def train_model_custom(
+        self,
+        ae_rom,
+        data_input_train,
+        data_output_train,
+        data_input_val,
+        data_output_val,
+        optimizer,
+        loss,
+        options,
+        params,
+        param_prefix,
+    ):
+
+        batch_size = params[param_prefix + "batch_size"]
+        max_epochs = params[param_prefix + "max_epochs"]
+        loss_train_hist = np.zeros(max_epochs)
+        loss_val_hist = np.zeros(max_epochs)
+        loss_addtl_train_list = []
+        loss_addtl_val_list = []
+
+        # get batch iterator
+        # assumed that leading dimension of data is batch dimension
+        num_samps = data_input_train.shape[0]
+        batch_zip = [i for i in zip(range(0, num_samps, batch_size), range(batch_size, num_samps + 1, batch_size))]
+        if batch_zip[-1][-1] != num_samps:
+            if batch_zip[-1][-1] == (num_samps - 1):
+                batch_zip[-1] = (batch_zip[-1][0], num_samps)
+            else:
+                batch_zip.append((batch_zip[-1][-1], num_samps))
+
+        # get trainable variables
+        trainable_vars = []
+        for grad_source in ae_rom.grad_source_list:
+            trainable_vars += grad_source.trainable_variables
+
+        metrics = ["loss", "val_loss"]
+
+        # training loop
+        for epoch in range(max_epochs):
+            print("Epoch " + str(epoch + 1) + "/" + str(max_epochs))
+
+            progbar = Progbar(num_samps, stateful_metrics=metrics, verbose=verbose)
+
+            # batch loop
+            loss_val = 0.0
+            for batch, (start, end) in enumerate(batch_zip):
+                data_input_train_batch = data_input_train[start:end, ...]
+                data_output_train_batch = data_output_train[start:end, ...]
+
+                # compute gradients and back-propagate
+                with tf.GradientTape() as tape:
+                    loss_train_list = loss(data_input_train_batch, data_output_train_batch, ae_rom)
+                    loss_train = loss_train_list[0]
+                grad = tape.gradient(target=loss_train, sources=trainable_vars)
+                optimizer.apply_gradients(zip(grad, trainable_vars))
+
+                if verbose == 1:
+                    progbar.update(num_samps, values=[("loss", loss_train.numpy()), ("val_loss", loss_val.numpy())])
+
+            # Compute validation loss
+            loss_val_list = loss(data_input_val, data_output_val, ae_rom)
+            loss_val = loss_val_list[0]
+            progbar.update(num_samps, values=[("loss", loss_train.numpy()), ("val_loss", loss_val.numpy())])
+
+            # store total loss history
+            loss_train_hist[epoch] = loss_train.numpy()
+            loss_val_hist[epoch] = loss_val.numpy()
+            
+            # store additional loss histories
+            if len(loss_train_list) > 1:
+                if epoch == 0:
+                    for loss_idx in range(len(loss_train_list) - 1):
+                        loss_addtl_train_list.append(np.zeros(max_epochs))
+                        loss_addtl_val_list.append(np.zeros(max_epochs))
+
+                for loss_idx in range(len(loss_train_list) - 1):
+                    loss_addtl_train_list[loss_idx][epoch] = loss_train_list[loss_idx + 1].numpy()
+                    loss_addtl_val_list[loss_idx][epoch] = loss_val_list[loss_idx + 1].numpy()
+
+            # TODO: check for early stopping
+
+        return loss_train_hist, loss_val_hist, loss_addtl_train_list, loss_addtl_val_list
 
     def calc_loss(self, model_obj, input_data, output_data):
 

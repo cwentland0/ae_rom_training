@@ -15,56 +15,40 @@ def pure_mse(y_true, y_pred):
     mse = MeanSquaredError()
     return mse(y_true, y_pred)
 
+@tf.function
+def ae_ts_combined_error(data_seq, data_seq_ignore, ae_rom):
+    """Simple loss for prediction and reconstruction error of combined AE/TS."""
 
-class AETSCombinedLoss(LossFunctionWrapper):
-    """Wrapper class for computing the combined autoencoder/time stepper loss"""
+    # TODO: ignore the second input, it's not relevant
 
-    def __init__(
-        self,
-        reduction=losses_utils.ReductionV2.AUTO,
-        name="ae_ts_combined_loss",
-        normalize=False,
-        eps=1e-12,
-        alpha=1.0,
-        beta=1.0,
-    ):
+    loss_recon = 0.0
+    loss_step = 0.0
 
-        super().__init__(
-            ae_ts_combined_error, reduction=reduction, name=name, normalize=normalize, eps=eps, alpha=alpha, beta=beta
-        )
+    # initial encoding
+    latent_vars_pred_init = ae_rom.autoencoder.encoder.model_obj(data_seq[:, 0, ...])
+    sol_pred_init = ae_rom.autoencoder.decoder.model_obj(latent_vars_pred_init)
 
+    sol_seq = tf.cast(data_seq, sol_pred_init.dtype)
+    seq_length = sol_seq.shape[1]
 
-def ae_ts_combined_error(
-    y_low_true, y_low_pred, y_full_true, y_full_pred, normalize=False, eps=1e-12, alpha=1.0, beta=1.0,
-):
-    """Simple loss for prediction and reconstruction error of combined AE/TS.
-    
-    y_low_true is the "true" low-dimensional state encoded from the full-dimensional state
-    y_low_pred is the predicted low-dimensional state advanced via the time-stepper
+    # initial reconstruction loss (no advancing with time stepper)
+    loss_recon += tf.math.reduce_mean(tf.math.squared_difference(sol_pred_init, sol_seq[:, 0, ...]))
 
-    y_full_true is the true full-dimensional state
-    y_full_pred is the predicted full-dimensional state via decoding y_low_pred
+    latent_vars_pred = tf.identity(latent_vars_pred_init)
 
-    alpha scales the reconstruction loss, beta scales the time-step loss
+    for seq in range(1, seq_length - 1):
 
-    All input tensors are of shape [num_snaps, num_dof]
-    """
+        # encode solution
+        latent_vars_encode = ae_rom.autoencoder.encoder.model_obj(sol_seq[:, seq, ...])
+        
+        # make time stepper prediction
+        latent_vars_pred = ae_rom.time_stepper.stepper.model_obj(latent_vars_pred)
 
-    recon_loss_vec = tf.norm(tf.math.subtract(y_full_true, y_full_pred), ord=2, axis=1)
-    step_loss_vec = tf.norm(tf.math.subtract(y_low_true, y_low_pred), ord=2, axis=1)
+        # decode predicted solution
+        sol_pred = ae_rom.autoencoder.decoder.model_obj(latent_vars_pred)
 
-    if normalize:
-        recon_loss_norm_vec = tf.add(tf.norm(y_full_true, ord=2, axis=1), eps)
-        step_loss_norm_vec = tf.add(tf.norm(y_low_true, ord=2, axis=1), eps)
+        loss_recon += tf.math.reduce_mean(tf.math.squared_difference(sol_pred, sol_seq[:, seq + 1, ...]))
+        loss_step += tf.math.reduce_mean(tf.math.squared_difference(latent_vars_pred, latent_vars_encode))
 
-        recon_loss_vec = tf.math.divide(recon_loss_vec, recon_loss_norm_vec)
-        step_loss_vec = tf.math.divide(step_loss_vec, step_loss_norm_vec)
+    return [loss_recon + loss_step, loss_recon, loss_step]
 
-    recon_loss = tf.math.reduce_mean(recon_loss_vec)
-    step_loss = tf.math.reduce_mean(step_loss_vec)
-
-    return alpha * recon_loss + beta * step_loss
-
-
-# def ae_ts_combined_norm():
-# """Normalized version of combined autoencoder/time stepper loss"""

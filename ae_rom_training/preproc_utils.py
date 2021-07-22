@@ -125,6 +125,7 @@ def read_input_file(input_file):
 
     # global parameters
     input_dict["aerom_type"] = input_dict_raw["aerom_type"]
+    input_dict["split_scheme"] = input_dict_raw["split_scheme"]
     input_dict["centering_scheme"] = input_dict_raw["centering_scheme"]
     input_dict["normal_scheme"] = input_dict_raw["normal_scheme"]
     input_dict["val_perc"] = input_dict_raw["val_perc"]
@@ -213,6 +214,7 @@ def get_train_val_data(input_dict):
         data_var_train, data_var_val = preproc_raw_data(
             data_list_var_train,
             input_dict["centering_scheme"],
+            input_dict["split_scheme"],
             input_dict["normal_scheme"],
             input_dict["model_dir"],
             input_dict["network_suffixes"][net_idx],
@@ -318,7 +320,7 @@ def agg_data_sets(data_dir, data_loc_list, idx_start_list, idx_end_list, idx_ski
 
 
 def preproc_raw_data(
-    data_list_train, centering_scheme, normal_scheme, model_dir, network_suffix, data_list_val=None, val_perc=0.0,
+    data_list_train, centering_scheme, split_scheme, normal_scheme, model_dir, network_suffix, data_list_val=None, val_perc=0.0,
 ):
 
     # make train/val split from given training data
@@ -327,11 +329,12 @@ def preproc_raw_data(
         # concatenate samples after centering
         for dataset_num, data_arr in enumerate(data_list_train):
             data_in = center_data_set(data_arr, centering_scheme, model_dir, network_suffix, save_cent=True)
-            data_in_train, data_in_val = train_test_split(data_in, test_size=val_perc, random_state=RANDOM_SEED)
+            data_in_train, data_in_val = split_data_set(data_in, split_scheme, val_perc)
             if dataset_num == 0:
                 data_train = data_in_train.copy()
                 data_val = data_in_val.copy()
             else:
+                # TODO: this format causes problems for time series split
                 data_train = np.append(data_train, data_in_train, axis=0)
                 data_val = np.append(data_val, data_in_val, axis=0)
 
@@ -397,6 +400,18 @@ def center_data_set(data, cent_type, model_dir, network_suffix, save_cent=False)
 
     return data
 
+
+def split_data_set(data, split_type, val_perc):
+
+    if split_type == "random":
+        data_train, data_val = train_test_split(data, test_size=val_perc, random_state=RANDOM_SEED)
+
+    elif split_type == "random_series":
+        train_tresh = int(data.shape[0] * (1.0 - val_perc))
+        data_train = data[:train_tresh, ...]
+        data_val = data[train_tresh:, ...]
+
+    return data_train, data_val
 
 # normalize data set according to save_cent
 def norm_switch(data, save_cent, axes):
