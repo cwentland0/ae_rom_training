@@ -147,7 +147,7 @@ class AEROM:
                 else:
                     default = param_list[1]
                     # ignore parameters without defaults if their necessitating layers aren't in the network
-                    if ("dense" not in layer_types) and (param_name in ["output_shape"]):
+                    if ("dense" not in layer_types) and (param_name in ["output_size"]):
                         continue
 
                     elif (
@@ -260,7 +260,7 @@ class AEROM:
 
                     self.param_space[param_key] = param_val
 
-    def build_and_train(self, params, input_dict, data_train, data_val, ae=False, ts=False):
+    def build_and_train(self, params, input_dict, data_list_train, data_list_val, ae=False, ts=False):
         """Build and train network.
 
         Acts as objective function for HyperOpt, or normal training function without HyperOpt.
@@ -271,7 +271,7 @@ class AEROM:
         # build autoencoder
         if ae:
             assert self.autoencoder is not None, "Autoencoder not initialized for this model"
-            data_shape = data_train.shape[1:]
+            data_shape = data_list_train[0].shape[1:]
             self.autoencoder.build(input_dict, params, data_shape, batch_size=None)
             self.autoencoder.check_build(input_dict, data_shape)
 
@@ -293,7 +293,7 @@ class AEROM:
 
         # train network, finally
         time_start = time()
-        loss_train, loss_val = self.train(input_dict, params, data_train, data_val, param_prefix=param_prefix)
+        loss_train, loss_val = self.train(input_dict, params, data_list_train, data_list_val, param_prefix=param_prefix)
         eval_time = time() - time_start
 
         # check if this model is the best so far, if so save
@@ -307,7 +307,7 @@ class AEROM:
             "eval_time": eval_time,  # time (in seconds) to train model
         }
 
-    def train(self, input_dict, params, data_train, data_val, param_prefix=""):
+    def train(self, input_dict, params, data_list_train, data_list_val, param_prefix=""):
         """Train the network.
         
         If the entire model, along with its training scheme, can be lumped into a single model,
@@ -324,15 +324,13 @@ class AEROM:
 
         # Built-in training method implemented in ML library
         if self.train_builtin:
-            loss_train, loss_val = self.mllib.train_model_builtin(
-                self.model_obj,
-                data_train,
-                data_train,
-                data_val,
-                data_val,
+            loss_train, loss_val = self.train_model_builtin(
+                data_list_train,
+                data_list_val,
                 optimizer,
                 loss,
                 options,
+                input_dict,
                 params,
                 param_prefix,
             )
@@ -340,7 +338,7 @@ class AEROM:
         # Custom training method is implemented by child class
         else:
             loss_train, loss_val = self.train_model_custom(
-                data_train, data_train, data_val, data_val, optimizer, loss, options, params, param_prefix,
+                data_list_train, data_list_val, optimizer, loss, options, input_dict, params, param_prefix,
             )
 
         return loss_train, loss_val

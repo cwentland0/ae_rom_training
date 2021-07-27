@@ -11,6 +11,7 @@ from ae_rom_training.preproc_utils import read_input_file, get_train_val_data
 from ae_rom_training.ml_library import get_ml_library
 from ae_rom_training.ae_rom.baseline_ae_rom import BaselineAEROM
 from ae_rom_training.ae_rom.koopman_ae_otto2019 import KoopmanAEOtto2019
+from ae_rom_training.ae_rom.koopman_ae_pan2020 import KoopmanAEPan2020
 
 np.random.seed(RANDOM_SEED)  # seed NumPy RNG
 
@@ -42,7 +43,7 @@ def main():
     mllib = get_ml_library(input_dict)
 
     # get training and validation data
-    data_train_list, data_val_list = get_train_val_data(input_dict)
+    data_list_train, data_list_val, split_idxs_list_train, split_idxs_list_val = get_train_val_data(input_dict)
 
     # initialize all autoencoders
     # TODO: move this junk somewhere else
@@ -54,6 +55,8 @@ def main():
             aerom_list.append(BaselineAEROM(input_dict, mllib, net_suff))
         elif aerom_type == "koopman_otto2019":
             aerom_list.append(KoopmanAEOtto2019(input_dict, mllib, network_suffix))
+        elif aerom_type == "koopman_pan2020":
+            aerom_list.append(KoopmanAEPan2020(input_dict, mllib, network_suffix))
         else:
             raise ValueError("Invalid aerom_type selection: " + str(aerom_type))
 
@@ -61,8 +64,11 @@ def main():
     for net_idx in range(input_dict["num_networks"]):
 
         net_suff = input_dict["network_suffixes"][net_idx]
-        data_train = data_train_list[net_idx]
-        data_val = data_val_list[net_idx]
+        data_list_train_net = data_list_train[net_idx]
+        data_list_val_net = data_list_val[net_idx]
+        input_dict["split_idxs_train"] = split_idxs_list_train[net_idx]
+        input_dict["split_idxs_val"] = split_idxs_list_val[net_idx]
+        
         aerom = aerom_list[net_idx]
 
         if input_dict["use_hyperopt"]:
@@ -71,7 +77,7 @@ def main():
 
             # wrap objective function to pass additional arguments
             objective_func_wrapped = partial(
-                aerom.build_and_train, input_dict=input_dict, data_train=data_train, data_val=data_val,
+                aerom.build_and_train, input_dict=input_dict, data_list_train=data_list_train_net, data_list_val=data_list_val_net,
             )
 
             # find "best" model according to specified hyperparameter optimization algorithm
@@ -103,11 +109,11 @@ def main():
             if (aerom.time_stepper is None) or (
                 (aerom.time_stepper is not None) and (aerom.training_format == "separate")
             ):
-                best = aerom.build_and_train(aerom.param_space, input_dict, data_train, data_val, ae=True)
+                best = aerom.build_and_train(aerom.param_space, input_dict, data_list_train_net, data_list_val_net, ae=True)
 
             # train autoencoder and time stepper together
             elif (aerom.time_stepper is not None) and (aerom.training_format == "combined"):
-                best = aerom.build_and_train(aerom.param_space, input_dict, data_train, data_val, ae=True, ts=True)
+                best = aerom.build_and_train(aerom.param_space, input_dict, data_list_train_net, data_list_val_net, ae=True, ts=True)
 
             best_space = aerom.param_space
 

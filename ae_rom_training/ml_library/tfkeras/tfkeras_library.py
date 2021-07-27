@@ -18,6 +18,7 @@ from tensorflow.python.types.core import Value
 from ae_rom_training.constants import RANDOM_SEED, TRAIN_VERBOSITY
 from ae_rom_training.ml_library.ml_library import MLLibrary
 from ae_rom_training.ml_library.tfkeras.tfkeras_losses import pure_l2, pure_mse, ae_ts_combined_error
+from ae_rom_training.ml_library.tfkeras.tfkeras_layers import ContinuousKoopman
 from ae_rom_training.preproc_utils import get_shape_tuple
 
 
@@ -297,6 +298,27 @@ class TFKerasLibrary(MLLibrary):
 
         return layer_output, added_flatten
 
+    def get_continuous_koopman_layer(
+        self,
+        layer_input,
+        output_size,
+        num_input_layers,
+        stable=False,
+        kern_init="glorot_uniform",
+        name=None,
+    ):
+
+        time_input = self.get_input_layer((1,), name="input_" + str(num_input_layers))
+
+        layer_output = ContinuousKoopman(
+            output_size,
+            stable=stable,
+            kernel_initializer=kern_init,
+            name=name,
+        )(layer_input, time_input)
+
+        return [time_input, layer_output]
+
     def get_reshape_layer(self, layer_input, target_shape, name=None):
         """"Implement tensor input reshape."""
 
@@ -357,9 +379,15 @@ class TFKerasLibrary(MLLibrary):
 
         return input_shape, output_shape
 
-    def build_model_obj(self, tensor_list):
+    def build_model_obj(self, tensor_list, input_idx_list):
 
-        return Model(tensor_list[0], tensor_list[-1])
+        # TODO: handle multiple outputs
+
+        input_list = []
+        for input_idx in input_idx_list:
+            input_list.append(tensor_list[input_idx])
+
+        return Model(input_list, tensor_list[-1])
 
     def display_model_summary(self, model_obj, displaystr=None):
 
@@ -444,6 +472,7 @@ class TFKerasLibrary(MLLibrary):
         optimizer,
         loss,
         options,
+        input_dict,
         params,
         param_prefix,
     ):
@@ -557,6 +586,16 @@ class TFKerasLibrary(MLLibrary):
 
         loss = model_obj.evaluate(x=input_data, y=output_data, verbose=0)
         return loss
+
+    def get_koopman(self, model_obj):
+        """Compatability layer to get Koopman operator from continuous Koopman model.
+        
+        model_obj is assumed to have two layers: Input and ContinuousKoopman.
+        Retrieval of K is handled within layer.
+        """
+
+        return model_obj.layers[1].get_koopman_numpy()
+
 
     def save_model(self, model_obj, save_path, save_h5=True):
         """Save Tensorflow model object.

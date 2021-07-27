@@ -2,20 +2,20 @@ import os
 
 import numpy as np
 
-from ae_rom_training.preproc_utils import hankelize
+from ae_rom_training.preproc_utils import hankelize, calc_time_values
 from ae_rom_training.ae_rom.ae_rom import AEROM
 from ae_rom_training.autoencoder.autoencoder import Autoencoder
 from ae_rom_training.time_stepper.koopman import Koopman
 from ae_rom_training.constants import FLOAT_TYPE
 
 
-class KoopmanAEOtto2019(AEROM):
+class KoopmanAEPan2020(AEROM):
     """Autoencoder which learns discrete Koopman, via Otto and Rowley (2019)"""
 
     def __init__(self, input_dict, mllib, network_suffix):
 
         self.autoencoder = Autoencoder(mllib)
-        self.time_stepper = Koopman(input_dict, mllib, continuous=False)
+        self.time_stepper = Koopman(input_dict, mllib, continuous=True)
 
         super().__init__(input_dict, mllib, network_suffix)
 
@@ -52,8 +52,8 @@ class KoopmanAEOtto2019(AEROM):
         optimizer,
         loss,
         options,
-        params,
         input_dict,
+        params,
         param_prefix,
     ):
         """Call custom training loop after organizing data"""
@@ -76,6 +76,7 @@ class KoopmanAEOtto2019(AEROM):
             self.time_stepper.stepper.model_obj,
         ]
 
+        raise ValueError
         loss_train_hist, loss_val_hist, loss_addtl_train_list, loss_addtl_val_list = self.mllib.train_model_custom(
             self,
             data_train_seqs,

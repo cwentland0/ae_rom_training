@@ -34,6 +34,7 @@ LAYER_PARAM_DICT = {
     "output_size": [int, nan],  # output size for dense layers
     "target_shape": [(int,), nan],  # target shape for reshape layers
     "use_bias": [bool, True],  # whether to apply bias to a layer's calculations
+    "stable": [bool, True],  # whether to use stable formulation for continuous Koopman
 }
 
 # training parameters
@@ -46,6 +47,7 @@ TRAIN_PARAM_DICT = {
     "es_patience": [int, nan],  # number of iterations before early-stopping kicks in
     "batch_size": [int, nan],  # batch size
     "seq_length": [int, nan],  # length of time series sequence for evaluating time-steppers
+    "seq_step": [int, 1],  # step size for sliding window for Hankelizing data
     "normalize": [bool, False],  # whether to normalize the error contributions in combine AE + TS loss
     "alpha": [float, 0.5],  # weighting factor for autoencoder reconstruction error in combined loss
     "beta": [float, 0.5],  # weighting factor for time-stepper error in combined loss

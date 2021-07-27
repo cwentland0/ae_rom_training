@@ -99,11 +99,14 @@ class MLModel:
             self.preproc_layer_input(input_dict, params)
 
         # start off with input layer
+        input_idx_list = [0]
         self.layer_list.append(self.mllib.get_input_layer(input_shape, batch_size=batch_size, name="input_0"))
         self.num_layers += 1
 
+        input_count = 1
         conv_count, trans_conv_count = 0, 0
         dense_count = 0
+        koopman_continuous_count = 0
         reshape_count, flatten_count = 0, 0
         self.num_addtl_layers = 0
         addtl_layer_idxs = []
@@ -197,6 +200,23 @@ class MLModel:
                     self.num_addtl_layers += 1
                     flatten_count += 1
 
+            # custom continuous Koopman operator layer
+            # requires and extra input layer for input time step
+            elif layer_type == "koopman_continuous":
+                layer_output = self.mllib.get_continuous_koopman_layer(
+                    layer_input,
+                    layer_dict["output_size"],
+                    input_count,
+                    stable=layer_dict["stable"],
+                    kern_init=layer_dict["kern_init"],
+                    name="koopman_continuous_" + str(koopman_continuous_count)
+                )
+                addtl_layer_idxs.append(layer_idx + self.num_addtl_layers)
+                input_idx_list.append(layer_idx + self.num_addtl_layers + 1)
+                self.num_addtl_layers += 1
+                input_count += 1
+                koopman_continuous_count += 1
+
             # reshape layer
             elif layer_type == "reshape":
                 layer_output = self.mllib.get_reshape_layer(
@@ -212,7 +232,10 @@ class MLModel:
             else:
                 raise ValueError("Invalid layer_type: " + str(layer_type))
 
-            self.layer_list.append(layer_output)
+            if isinstance(layer_output, list):
+                self.layer_list += layer_output
+            else:
+                self.layer_list.append(layer_output)
 
         # account for any layers added silently
         self.num_layers += self.num_addtl_layers
@@ -220,4 +243,5 @@ class MLModel:
             self.layer_params_list.insert(layer_idx, "addtl_layer")
 
         # finalize model object
-        self.model_obj = self.mllib.build_model_obj(self.layer_list)
+        # TODO: handle multiple outputs
+        self.model_obj = self.mllib.build_model_obj(self.layer_list, input_idx_list)

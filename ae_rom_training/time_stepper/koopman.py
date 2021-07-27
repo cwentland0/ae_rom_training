@@ -4,14 +4,19 @@ import numpy as np
 
 from ae_rom_training.time_stepper.time_stepper import TimeStepper
 from ae_rom_training.ml_model.koopman_discrete import KoopmanDiscrete
+from ae_rom_training.ml_model.koopman_continuous import KoopmanContinuous
 
 
-class KoopmanDiscreteTS(TimeStepper):
+class Koopman(TimeStepper):
     """Model defining a discrete Koopman operator."""
 
-    def __init__(self, input_dict, mllib):
+    def __init__(self, input_dict, mllib, continuous=False):
 
-        self.stepper = KoopmanDiscrete("koopman", input_dict, mllib)
+        self.continuous = continuous
+        if self.continuous:
+            self.stepper = KoopmanContinuous("koopman", input_dict, mllib)
+        else:
+            self.stepper = KoopmanDiscrete("koopman", input_dict, mllib)
         super().__init__(mllib)
 
         self.component_networks = [self.stepper]
@@ -69,6 +74,13 @@ class KoopmanDiscreteTS(TimeStepper):
             + " vs. "
             + str(latent_shape)
         )
+
+        # check continuous implementation
+        if self.continuous:
+            time_input_shape, time_output_shape =  self.mllib.get_layer_io_shape(self.stepper.model_obj, 1)
+            assert time_input_shape == (1,), "Something went wrong in providing time input to continuous Koopman layer"
+            assert time_output_shape == (1,), "Something went wrong in providing time input to continuous Koopman layer"
+
         print("KOOPMAN passed I/O checks!")
 
     def save(self, model_dir, network_suffix):

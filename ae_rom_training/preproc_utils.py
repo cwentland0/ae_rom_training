@@ -1,11 +1,12 @@
 import re
 import os
+from math import ceil
 
 import numpy as np
 from sklearn.model_selection import train_test_split
 from hyperopt import tpe, rand
 
-from ae_rom_training.constants import RANDOM_SEED
+from ae_rom_training.constants import RANDOM_SEED, FLOAT_TYPE
 
 
 def parse_value(expr):
@@ -100,15 +101,20 @@ def read_input_file(input_file):
     input_dict["idx_start_list_train"] = catch_input(input_dict_raw, "idx_start_list_train", [0])
     input_dict["idx_end_list_train"] = catch_input(input_dict_raw, "idx_end_list_train", [None])
     input_dict["idx_skip_list_train"] = catch_input(input_dict_raw, "idx_skip_list_train", [None])
+    input_dict["time_init_list_train"] = catch_input(input_dict_raw, "time_init_list_train", [None])
+    input_dict["dt_list_train"] = catch_input(input_dict_raw, "dt_list_train", [None])
     input_dict["idx_start_list_val"] = catch_input(input_dict_raw, "idx_start_list_val", [0])
     input_dict["idx_end_list_val"] = catch_input(input_dict_raw, "idx_end_list_val", [None])
     input_dict["idx_skip_list_val"] = catch_input(input_dict_raw, "idx_skip_list_val", [None])
+    input_dict["time_init_list_val"] = catch_input(input_dict_raw, "time_init_list_val", [None])
+    input_dict["dt_list_val"] = catch_input(input_dict_raw, "dt_list_val", [None])
     input_dict["data_order"] = input_dict_raw["data_order"]
     input_dict["network_order"] = catch_input(input_dict_raw, "network_order", "NHWC")
     input_dict["network_suffixes"] = [""] * input_dict["num_networks"]
     for i, net_idxs in enumerate(input_dict["var_network_idxs"]):
         for j, idx in enumerate(net_idxs):
             input_dict["network_suffixes"][i] += "_" + str(idx)
+    
     num_datasets_train = len(input_dict["data_files_train"])
     if len(input_dict["idx_start_list_train"]) == 1:
         input_dict["idx_start_list_train"] *= num_datasets_train
@@ -116,12 +122,23 @@ def read_input_file(input_file):
         input_dict["idx_end_list_train"] *= num_datasets_train
     if len(input_dict["idx_skip_list_train"]) == 1:
         input_dict["idx_skip_list_train"] *= num_datasets_train
-    if len(input_dict["idx_start_list_val"]) == 1:
-        input_dict["idx_start_list_val"] *= num_datasets_train
-    if len(input_dict["idx_end_list_val"]) == 1:
-        input_dict["idx_end_list_val"] *= num_datasets_train
-    if len(input_dict["idx_skip_list_val"]) == 1:
-        input_dict["idx_skip_list_val"] *= num_datasets_train
+    if len(input_dict["time_init_list_train"]) == 1:
+        input_dict["time_init_list_train"] *= num_datasets_train
+    if len(input_dict["dt_list_train"]) == 1:
+        input_dict["dt_list_train"] *= num_datasets_train
+    
+    if input_dict["data_files_val"][0] is not None:
+        num_datasets_val = len(input_dict["data_files_val"])
+        if len(input_dict["idx_start_list_val"]) == 1:
+            input_dict["idx_start_list_val"] *= num_datasets_val
+        if len(input_dict["idx_end_list_val"]) == 1:
+            input_dict["idx_end_list_val"] *= num_datasets_val
+        if len(input_dict["idx_skip_list_val"]) == 1:
+            input_dict["idx_skip_list_val"] *= num_datasets_val
+        if len(input_dict["time_init_list_val"]) == 1:
+            input_dict["time_init_list_val"] *= num_datasets_val
+        if len(input_dict["dt_list_val"]) == 1:
+            input_dict["dt_list_val"] *= num_datasets_val
 
     # global parameters
     input_dict["aerom_type"] = input_dict_raw["aerom_type"]
@@ -201,24 +218,25 @@ def get_train_val_data(input_dict):
     # as this stands right now, no real point to doing centering/normalization separately, since there's
     #   no option to do separate centering/normalization/split schemes for different variables
     data_list_train, data_list_val = [], []
+    split_idxs_list_train, split_idxs_list_val = [], []
     for net_idx, var_idxs in enumerate(input_dict["var_network_idxs"]):
 
-        data_list_var_train = get_vars_from_data(data_list_raw_train, var_idxs)
+        data_list_var_train_in = get_vars_from_data(data_list_raw_train, var_idxs)
         if data_list_raw_val is not None:
-            data_list_var_val = get_vars_from_data(data_list_raw_val, var_idxs)
+            data_list_var_val_in = get_vars_from_data(data_list_raw_val, var_idxs)
         else:
-            data_list_var_val = None
+            data_list_var_val_in = None
 
         # pre-process data
         # includes centering, normalization, and train/validation split
-        data_var_train, data_var_val = preproc_raw_data(
-            data_list_var_train,
+        data_list_var_train, data_list_var_val, split_idxs_list_var_train, split_idxs_list_var_val = preproc_raw_data(
+            data_list_var_train_in,
             input_dict["centering_scheme"],
             input_dict["split_scheme"],
             input_dict["normal_scheme"],
             input_dict["model_dir"],
             input_dict["network_suffixes"][net_idx],
-            data_list_val=data_list_var_val,
+            data_list_val_var=data_list_var_val_in,
             val_perc=input_dict["val_perc"],
         )
 
@@ -230,13 +248,17 @@ def get_train_val_data(input_dict):
                 trans_axes = (0, 2, 3, 1)
             elif input_dict["num_dims"] == 3:
                 trans_axes = (0, 2, 3, 4, 1)
-            data_var_train = np.transpose(data_var_train, trans_axes)
-            data_var_val = np.transpose(data_var_val, trans_axes)
+            for idx, data_arr in enumerate(data_list_var_train):
+                data_list_var_train[idx] = np.transpose(data_arr, trans_axes)
+            for idx, data_arr in enumerate(data_list_var_val):
+                data_list_var_val[idx] = np.transpose(data_arr, trans_axes)
 
-        data_list_train.append(data_var_train)
-        data_list_val.append(data_var_val)
+        data_list_train.append(data_list_var_train)
+        data_list_val.append(data_list_var_val)
+        split_idxs_list_train.append(split_idxs_list_var_train)
+        split_idxs_list_val.append(split_idxs_list_var_val)
 
-    return data_list_train, data_list_val
+    return data_list_train, data_list_val, split_idxs_list_train, split_idxs_list_val
 
 
 def agg_data_sets(data_dir, data_loc_list, idx_start_list, idx_end_list, idx_skip_list, data_order):
@@ -320,123 +342,206 @@ def agg_data_sets(data_dir, data_loc_list, idx_start_list, idx_end_list, idx_ski
 
 
 def preproc_raw_data(
-    data_list_train,
+    data_list_train_var,
     centering_scheme,
     split_scheme,
     normal_scheme,
     model_dir,
     network_suffix,
-    data_list_val=None,
+    data_list_val_var=None,
     val_perc=0.0,
 ):
 
+    data_list_train, data_list_val = [], []
+    split_idxs_list_train, split_idxs_list_val = [], []
+
     # make train/val split from given training data
-    if data_list_val is None:
+    if data_list_val_var is None:
+
+        # if centering by initial condition, center here
+        if centering_scheme == "init_cond":
+            data_list_train_var_cent, _ = center_data_set(data_list_train_var, centering_scheme, model_dir, network_suffix, save_cent=True)
 
         # concatenate samples after centering
-        for dataset_num, data_arr in enumerate(data_list_train):
-            data_in = center_data_set(data_arr, centering_scheme, model_dir, network_suffix, save_cent=True)
-            data_in_train, data_in_val = split_data_set(data_in, split_scheme, val_perc)
-            if dataset_num == 0:
-                data_train = data_in_train.copy()
-                data_val = data_in_val.copy()
-            else:
-                # TODO: this format causes problems for time series split
-                data_train = np.append(data_train, data_in_train, axis=0)
-                data_val = np.append(data_val, data_in_val, axis=0)
+        for dataset_num, data_arr in enumerate(data_list_train_var_cent):
+            data_train, data_val, split_idxs_train, split_idxs_val = split_data_set(data_arr, split_scheme, val_perc)
+            data_list_train.append(data_train)
+            data_list_val.append(data_val)
+            split_idxs_list_train.append(split_idxs_train)
+            split_idxs_list_val.append(split_idxs_val)
 
     # training/validation split given by files
     else:
         # aggregate training samples after centering
-        for dataset_num, data_arr in enumerate(data_list_train):
+        # TODO: time values
+        raise ValueError("This section is totally incorrect, fix TBA")
+        for dataset_num, data_arr in enumerate(data_list_train_var):
             data_in_train = center_data_set(data_arr, centering_scheme, model_dir, network_suffix, save_cent=True)
             if dataset_num == 0:
                 data_train = data_in_train.copy()
             else:
                 data_train = np.append(data_train, data_in_train, axis=0)
         # shuffle training data to avoid temporal/dataset bias (shuffles along FIRST axis)
-        np.random.shuffle(data_train)
+        # TODO: figure out a wa
+        split_idxs_train = np.random.permutation(data_train.train[0])
+        data_train = [split_idxs_train, ...]
 
         # aggregate validation samples after sampling
         # don't need to shuffle validation data
-        for dataset_num, data_arr in enumerate(data_list_val):
+        for dataset_num, data_arr in enumerate(data_list_val_var):
             data_in_val = center_data_set(data_arr, centering_scheme, model_dir, network_suffix, save_cent=False)
             if dataset_num == 0:
                 data_val = data_in_val.copy()
             else:
                 data_val = np.append(data_val, data_in_val, axis=0)
 
+    # if not centering by initial condition, center here
+    if centering_scheme != "init_cond":
+        data_list_train, cent_prof = center_data_set(data_list_train, centering_scheme, model_dir, network_suffix, save_cent=True)
+        data_list_val, _ = center_data_set(data_list_val, centering_scheme, model_dir, network_suffix, cent_prof=cent_prof, save_cent=False)
+
     # normalize training and validation sets separately
-    data_train, norm_sub_train, norm_fac_train = normalize_data_set(
-        data_train, normal_scheme, model_dir, network_suffix, save_norm=True
+    data_list_train, norm_sub_train, norm_fac_train = normalize_data_set(
+        data_list_train, normal_scheme, model_dir, network_suffix, save_norm=True
     )
-    data_val, _, _ = normalize_data_set(
-        data_val, normal_scheme, model_dir, network_suffix, norms=[norm_sub_train, norm_fac_train], save_norm=False
+    data_list_val, _, _ = normalize_data_set(
+        data_list_val, normal_scheme, model_dir, network_suffix, norms=[norm_sub_train, norm_fac_train], save_norm=False
     )
 
-    return data_train, data_val
+    return data_list_train, data_list_val, split_idxs_list_train, split_idxs_list_val
 
 
-# assumed to be in NCHW format
-def center_data_set(data, cent_type, model_dir, network_suffix, save_cent=False):
+def calc_time_values(time_start, dt, idx_start, idx_end, idx_skip, shuffle_idxs=None):
 
-    num_dims = data.ndim - 2
+    steps = np.arange(idx_start, idx_end, idx_skip)
+    steps -= idx_start
+    time_values = time_start + dt * steps
+    time_diffs = time_values - time_values[0]
 
+    return time_values, time_diffs
+
+def center_switch(data: list, cent_type):
+    """Computes centering profile(s) for data
+    
+    data is a list of data arrays
+
+    If cent_type == "init_cond", the output is a list of centering profiles for each data set
+    Otherwise, the output is a single array to be applied to all data sets
+    """
+
+    # initial condition from each data array
     if cent_type == "init_cond":
-        if num_dims == 1:
-            cent_prof = data[[0], :, :]
-        elif num_dims == 2:
-            cent_prof = data[[0], :, :, :]
-        elif num_dims == 3:
-            cent_prof = data[[0], :, :, :, :]
-        else:
-            raise ValueError("Something went wrong with centering (data dimensions)")
+        cent_prof = []
+        for data_arr in data:
+            cent_prof.append(data_arr[[0], ...])
 
+    # time average across all data arrays
+    elif cent_type == "mean":
+        data_concat = np.concatenate(data, axis=0)
+        cent_prof = np.mean(data_concat, axis=0, keepdims=True)
+
+    # no centering
     elif cent_type == "none":
-        cent_prof = np.zeros((1,) + data.shape[1:], dtype=np.float64)
-
+        cent_prof = [np.zeros((1,) + data_arr.shape[1:], dtype=data_arr.dtype) for data_arr in data]
+    
     else:
         raise ValueError("Invalid choice of cent_type: " + cent_type)
 
-    data = data - cent_prof
+    return cent_prof
+
+def center_data_set(data: list, cent_type, model_dir, network_suffix, cent_prof=None, save_cent=False):
+    """Center data set about some profile.
+    
+    data is a list of data arrays assumed to be in NCHW format.
+    """
+
+    if cent_prof is None:
+        cent_prof = center_switch(data, cent_type)
+
+    for idx, data_arr in enumerate(data):
+        if cent_type == "init_cond":
+            data[idx] = data_arr - cent_prof[idx]
+        else:
+            data[idx] = data_arr - cent_prof
 
     if save_cent:
 
-        cent_prof = np.squeeze(cent_prof, axis=0)
-        np.save(os.path.join(model_dir, "cent_prof" + network_suffix + ".npy"), cent_prof)
+        if cent_type == "init_cond":
+            for idx, prof in enumerate(cent_prof):
+                cent_prof_out = np.squeeze(prof, axis=0)
+                np.save(os.path.join(model_dir, "cent_prof_dataset" + str(idx) + network_suffix + ".npy"), cent_prof_out)
+        else:
+            cent_prof_out = np.squeeze(cent_prof, axis=0)
+            np.save(os.path.join(model_dir, "cent_prof" + network_suffix + ".npy"), cent_prof_out)
 
-    return data
+    return data, cent_prof
 
 
 def split_data_set(data, split_type, val_perc):
+    """Split dataset into training and validation sets.
+    
+    data is a NumPy array here.
+    Also returns indices mapping original dataset snapshot indices to split indices.
+    """
 
     if split_type == "random":
-        data_train, data_val = train_test_split(data, test_size=val_perc, random_state=RANDOM_SEED)
+        indices = np.arange(data.shape[0])
+        data_train, data_val, idxs_train, idxs_val = train_test_split(data, indices, test_size=val_perc, random_state=RANDOM_SEED)
 
     elif split_type == "series_random":
         train_tresh = int(data.shape[0] * (1.0 - val_perc))
         data_train = data[:train_tresh, ...]
         data_val = data[train_tresh:, ...]
+        idxs_train = np.arange(train_tresh)
+        idxs_val = np.arange(train_tresh, data.shape[0])
 
     else:
         raise ValueError("Invalid split_scheme: " + str(split_type))
 
-    return data_train, data_val
+    return data_train, data_val, idxs_train, idxs_val
 
 
-# normalize data set according to save_cent
-def norm_switch(data, save_cent, axes):
+def hankelize(data: list, seq_length, seq_step=1):
+    """Arrange data snapshots into contiguous windows
+    
+    data is assumed to be a list of NumPy arrays.
+    Returns a list of Hankelized matrices.
+    """
+
+    data_seqs = []
+
+    for data_arr in data:
+        num_snaps = data_arr.shape[0]
+        num_seqs = ceil((num_snaps - seq_length + 1) / seq_step)
+        data_seqs.append(np.zeros((num_seqs, seq_length,) + data_arr.shape[1:], dtype=data_arr.dtype))
+        for seq_idx in range(num_seqs):
+            idx_start = seq_idx * seq_step
+            idx_end = idx_start + seq_length
+            data_seqs[-1][seq_idx, ...] = data_arr[idx_start : idx_end, ...]
+
+        # account for final window
+        if idx_end != num_snaps:
+            data_seqs[-1][-1, ...] = data_arr[-seq_length:, ...]
+
+    return data_seqs
+
+
+def norm_switch(data: list, norm_type, axes):
+    """Compute normalization profile
+    
+    Here, data is a single array concatenated along the time axis.
+    """
 
     ones_prof = np.ones((1,) + data.shape[1:], dtype=np.float64)
     zero_prof = np.zeros((1,) + data.shape[1:], dtype=np.float64)
 
-    if save_cent == "minmax":
+    if norm_type == "minmax":
         data_min = np.amin(data, axis=axes, keepdims=True)
         data_max = np.amax(data, axis=axes, keepdims=True)
         norm_sub = data_min * ones_prof
         norm_fac = (data_max - data_min) * ones_prof
 
-    elif save_cent == "l2":
+    elif norm_type == "l2":
         norm_fac = np.square(data)
         for dim_idx in range(len(axes)):
             norm_fac = np.sum(norm_fac, axis=axes[dim_idx], keepdims=True)
@@ -445,19 +550,27 @@ def norm_switch(data, save_cent, axes):
         norm_fac = norm_fac * ones_prof
         norm_sub = zero_prof
 
+    elif norm_type == "none":
+        norm_fac = ones_prof
+        norm_sub = zero_prof
+
     else:
-        raise ValueError("Invalid choice of save_cent: " + save_cent)
+        raise ValueError("Invalid choice of norm_type: " + norm_type)
 
     return norm_sub, norm_fac
 
 
 # determine how to normalized data given shape, normalize
 # assumed to be in NCHW format
-def normalize_data_set(data, save_cent, model_dir, network_suffix, norms=None, save_norm=False):
+def normalize_data_set(data: list, norm_type, model_dir, network_suffix, norms=None, save_norm=False):
+    """Normalize data
+    
+    data is a list of data arrays assumed to be in NCHW format
+    """
 
     # calculate norms
     if norms is None:
-        num_dims = data.ndim - 2  # ignore samples and channels dimensions
+        num_dims = data[0].ndim - 2  # ignore samples and channels dimensions
         if num_dims == 1:
             norm_axes = (0, 2)
 
@@ -470,22 +583,24 @@ def normalize_data_set(data, save_cent, model_dir, network_suffix, norms=None, s
         else:
             raise ValueError("Something went wrong with normalizing (data dimensions)")
 
-        norm_sub, norm_fac = norm_switch(data, save_cent, axes=norm_axes)
+        data_concat = np.concatenate(data, axis=0)
+        norm_sub, norm_fac = norm_switch(data_concat, norm_type, axes=norm_axes)
 
     # norms are provided
     else:
-        norm_sub = norms[0][None, :, :]
-        norm_fac = norms[1][None, :, :]
+        norm_sub = norms[0]
+        norm_fac = norms[1]
 
-    data = (data - norm_sub) / norm_fac
+    for idx, data_arr in enumerate(data):
+        data[idx] = (data_arr - norm_sub) / norm_fac
 
     if (norms is None) and save_norm:
 
-        norm_sub = np.squeeze(norm_sub, axis=0)
-        norm_fac = np.squeeze(norm_fac, axis=0)
+        norm_sub_out = np.squeeze(norm_sub, axis=0)
+        norm_fac_out = np.squeeze(norm_fac, axis=0)
 
-        np.save(os.path.join(model_dir, "norm_sub_prof" + network_suffix + ".npy"), norm_sub)
-        np.save(os.path.join(model_dir, "norm_fac_prof" + network_suffix + ".npy"), norm_fac)
+        np.save(os.path.join(model_dir, "norm_sub_prof" + network_suffix + ".npy"), norm_sub_out)
+        np.save(os.path.join(model_dir, "norm_fac_prof" + network_suffix + ".npy"), norm_fac_out)
 
     return data, norm_sub, norm_fac
 
