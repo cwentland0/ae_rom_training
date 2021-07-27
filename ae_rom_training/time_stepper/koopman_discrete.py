@@ -3,22 +3,22 @@ import os
 import numpy as np
 
 from ae_rom_training.time_stepper.time_stepper import TimeStepper
-from ae_rom_training.ml_model.koopman import Koopman
+from ae_rom_training.ml_model.koopman_discrete import KoopmanDiscrete
 
 
-class KoopmanDiscrete(TimeStepper):
+class KoopmanDiscreteTS(TimeStepper):
     """Model defining a discrete Koopman operator."""
 
     def __init__(self, input_dict, mllib):
 
-        self.stepper = Koopman("koopman", input_dict, mllib)
+        self.stepper = KoopmanDiscrete("koopman", input_dict, mllib)
         super().__init__(mllib)
 
         self.component_networks = [self.stepper]
 
     # def calc_dmd(self, data, num_modes):
     #     """Compute DMD matrix of dimension num_modes of given data.
-        
+
     #     Data is assumed to be in NCHW or NHWC, either way the last channels get flattened.
     #     """
 

@@ -320,7 +320,14 @@ def agg_data_sets(data_dir, data_loc_list, idx_start_list, idx_end_list, idx_ski
 
 
 def preproc_raw_data(
-    data_list_train, centering_scheme, split_scheme, normal_scheme, model_dir, network_suffix, data_list_val=None, val_perc=0.0,
+    data_list_train,
+    centering_scheme,
+    split_scheme,
+    normal_scheme,
+    model_dir,
+    network_suffix,
+    data_list_val=None,
+    val_perc=0.0,
 ):
 
     # make train/val split from given training data
@@ -412,6 +419,7 @@ def split_data_set(data, split_type, val_perc):
         data_val = data[train_tresh:, ...]
 
     return data_train, data_val
+
 
 # normalize data set according to save_cent
 def norm_switch(data, save_cent, axes):

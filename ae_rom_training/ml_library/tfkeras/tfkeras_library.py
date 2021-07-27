@@ -30,6 +30,7 @@ elif TRAIN_VERBOSITY == "max":
 else:
     raise ValueError("Invalid entry for TRAIN_VERBOSITY: " + str(TRAIN_VERBOSITY))
 
+
 class TFKerasLibrary(MLLibrary):
     """Functionality for Tensorflow-Keras"""
 
@@ -476,9 +477,9 @@ class TFKerasLibrary(MLLibrary):
         data_output_val,
         optimizer,
         loss,
-        options,
         params,
         param_prefix,
+        **kwargs,
     ):
 
         batch_size = params[param_prefix + "batch_size"]
@@ -519,7 +520,7 @@ class TFKerasLibrary(MLLibrary):
 
                 # compute gradients and back-propagate
                 with tf.GradientTape() as tape:
-                    loss_train_list = loss(data_input_train_batch, data_output_train_batch, ae_rom)
+                    loss_train_list = loss(data_input_train_batch, data_output_train_batch, ae_rom, **kwargs)
                     loss_train = loss_train_list[0]
                 grad = tape.gradient(target=loss_train, sources=trainable_vars)
                 optimizer.apply_gradients(zip(grad, trainable_vars))
@@ -535,7 +536,7 @@ class TFKerasLibrary(MLLibrary):
             # store total loss history
             loss_train_hist[epoch] = loss_train.numpy()
             loss_val_hist[epoch] = loss_val.numpy()
-            
+
             # store additional loss histories
             if len(loss_train_list) > 1:
                 if epoch == 0:
@@ -566,6 +567,6 @@ class TFKerasLibrary(MLLibrary):
         assert not ext, "save_path should not have a file extension; it currently has: " + ext
 
         if save_h5:
-            model_obj.save(save_path, save_format="h5")
+            model_obj.save(save_path + ".h5", save_format="h5")
         else:
             model_obj.save(save_path)

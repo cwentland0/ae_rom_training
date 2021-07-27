@@ -202,8 +202,8 @@ class AEROM:
                     expr_type = input_dict[expr_key]
 
                 if self.time_stepper is None:
-                   if param_name in ["seq_length"]:
-                       continue 
+                    if param_name in ["seq_length"]:
+                        continue
 
                 # has no default
                 if default is nan:
@@ -340,15 +340,7 @@ class AEROM:
         # Custom training method is implemented by child class
         else:
             loss_train, loss_val = self.train_model_custom(
-                data_train,
-                data_train,
-                data_val,
-                data_val,
-                optimizer,
-                loss,
-                options,
-                params,
-                param_prefix,
+                data_train, data_train, data_val, data_val, optimizer, loss, options, params, param_prefix,
             )
 
         return loss_train, loss_val

@@ -4,8 +4,9 @@ import numpy as np
 
 from ae_rom_training.ae_rom.ae_rom import AEROM
 from ae_rom_training.autoencoder.autoencoder import Autoencoder
-from ae_rom_training.time_stepper.koopman_discrete import KoopmanDiscrete
+from ae_rom_training.time_stepper.koopman_discrete import KoopmanDiscreteTS
 from ae_rom_training.constants import FLOAT_TYPE
+
 
 class KoopmanAEOtto2019(AEROM):
     """Autoencoder which learns discrete Koopman, via Otto and Rowley (2019)"""
@@ -13,7 +14,7 @@ class KoopmanAEOtto2019(AEROM):
     def __init__(self, input_dict, mllib, network_suffix):
 
         self.autoencoder = Autoencoder(mllib)
-        self.time_stepper = KoopmanDiscrete(input_dict, mllib)
+        self.time_stepper = KoopmanDiscreteTS(input_dict, mllib)
 
         super().__init__(input_dict, mllib, network_suffix)
 
@@ -53,7 +54,7 @@ class KoopmanAEOtto2019(AEROM):
         loss,
         options,
         params,
-        param_prefix
+        param_prefix,
     ):
         """Call custom training loop after organizing data"""
 
@@ -70,13 +71,17 @@ class KoopmanAEOtto2019(AEROM):
             data_train_input_seqs[seq_idx, ...] = data_train_input[seq_idx : seq_idx + seq_length, ...]
         for seq_idx in range(num_seqs_val):
             data_val_input_seqs[seq_idx, ...] = data_val_input[seq_idx : seq_idx + seq_length, ...]
-        
+
         # shuffle sequences
         shuffle_idxs = np.random.permutation(num_seqs_train)
         data_train_input_seqs = data_train_input_seqs[shuffle_idxs, ...]
 
         # get source list
-        self.grad_source_list = [self.autoencoder.decoder.model_obj, self.autoencoder.encoder.model_obj, self.time_stepper.stepper.model_obj]
+        self.grad_source_list = [
+            self.autoencoder.decoder.model_obj,
+            self.autoencoder.encoder.model_obj,
+            self.time_stepper.stepper.model_obj,
+        ]
 
         loss_train_hist, loss_val_hist, loss_addtl_train_list, loss_addtl_val_list = self.mllib.train_model_custom(
             self,
@@ -96,7 +101,7 @@ class KoopmanAEOtto2019(AEROM):
         self.loss_val_recon = loss_addtl_val_list[0]
         self.loss_val_step = loss_addtl_val_list[1]
 
-        # TODO: adjust this value if 
+        # TODO: adjust this value if
         loss_train = loss_train_hist[-1]
         loss_val = loss_val_hist[-1]
 
