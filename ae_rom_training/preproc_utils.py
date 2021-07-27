@@ -413,10 +413,13 @@ def split_data_set(data, split_type, val_perc):
     if split_type == "random":
         data_train, data_val = train_test_split(data, test_size=val_perc, random_state=RANDOM_SEED)
 
-    elif split_type == "random_series":
+    elif split_type == "series_random":
         train_tresh = int(data.shape[0] * (1.0 - val_perc))
         data_train = data[:train_tresh, ...]
         data_val = data[train_tresh:, ...]
+
+    else:
+        raise ValueError("Invalid split_scheme: " + str(split_type))
 
     return data_train, data_val
 

@@ -477,6 +477,7 @@ class TFKerasLibrary(MLLibrary):
         data_output_val,
         optimizer,
         loss,
+        options,
         params,
         param_prefix,
         **kwargs,
