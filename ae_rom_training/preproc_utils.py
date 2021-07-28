@@ -418,6 +418,10 @@ def calc_time_values(time_start, dt, idx_start, idx_end, idx_skip, shuffle_idxs=
     time_values = time_start + dt * steps
     time_diffs = time_values - time_values[0]
 
+    if shuffle_idxs is not None:
+        time_values = time_values[shuffle_idxs]
+        time_diffs = time_diffs[shuffle_idxs]
+
     return time_values, time_diffs
 
 def center_switch(data: list, cent_type):
@@ -509,9 +513,16 @@ def hankelize(data: list, seq_length, seq_step=1):
     """
 
     data_seqs = []
+    num_dims = data[0].ndim
 
     for data_arr in data:
         num_snaps = data_arr.shape[0]
+
+        # accommodate single-value sequences, actually need to keep this for layer inputs
+        if num_dims == 1:
+            data_arr = np.expand_dims(data_arr, axis=-1)
+        
+        # extract windows
         num_seqs = ceil((num_snaps - seq_length + 1) / seq_step)
         data_seqs.append(np.zeros((num_seqs, seq_length,) + data_arr.shape[1:], dtype=data_arr.dtype))
         for seq_idx in range(num_seqs):
@@ -608,13 +619,12 @@ def normalize_data_set(data: list, norm_type, model_dir, network_suffix, norms=N
 def get_shape_tuple(shape_var):
 
     if type(shape_var) is list:
-        if len(shape_var) != 1:
-            raise ValueError("Invalid model I/O size")
+        if len(shape_var) == 1:
+            return shape_var[0]
         else:
-            shape_var = shape_var[0]
+            return shape_var
+
     elif type(shape_var) is tuple:
-        pass
+        return shape_var
     else:
         raise TypeError("Invalid shape input of type " + str(type(shape_var)))
-
-    return shape_var

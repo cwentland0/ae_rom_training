@@ -14,9 +14,14 @@ class ContinuousKoopman(Layer):
 
     def build(self, input_shape):
 
-        assert input_shape.rank == 2, "Input to continuous Koopman is not two-dimensional (batch, output_size)"
-        assert input_shape[-1] == self.output_size, (
+        assert (input_shape[0].rank == 2) and (input_shape[1].rank == 2), (
+            "Input to continuous Koopman is not two-dimensional (batch, output_size)"
+        )
+        assert input_shape[0][-1] == self.output_size, (
             "Input to continuous Koopman does not have " + str(self.output_size) + " units, as expected"
+        )
+        assert input_shape[1][-1] == 1, (
+            "Time input to continuous Koopman does not have 1 unit, as expected"
         )
 
         if self.stable:
@@ -50,14 +55,20 @@ class ContinuousKoopman(Layer):
         config = super().get_config()
         config.update({"output_size": self.output_size, "stable": self.stable, "kernel_initializer": self.kernel_initializer})
 
-    def call(self, inputs, Dt):
+    def call(self, inputs):
         """Computes continuous Koopman operation, inputs @ exp(Dt * K)
         
         inputs: tensor of shape (output_size,) representing initial latent variable value
-        Dt: scalar, time step from initial latent variable to desired output latent variable prediction
+        Dt: scalar, time step of desired output latent variable prediction
         """
 
         if self.stable:
             self.set_tridiag()
 
-        return tf.matmul(inputs, tf.linalg.expm(Dt * self.K))
+        # compute continuous Koopman operator 
+        exp = tf.linalg.expm(tf.expand_dims(inputs[1], axis=-1) * tf.expand_dims(self.K, axis=0))
+
+        # compute prediction
+        pred = tf.matmul(tf.expand_dims(inputs[0], axis=1), exp)
+
+        return tf.squeeze(pred, axis=1)

@@ -17,6 +17,13 @@ class KoopmanAEPan2020(AEROM):
         self.autoencoder = Autoencoder(mllib)
         self.time_stepper = Koopman(input_dict, mllib, continuous=True)
 
+        # check that time inputs are present
+        assert input_dict["time_init_list_train"][0] is not None, "Must provide time_init_list_train for continuous Koopman"
+        assert input_dict["dt_list_train"][0] is not None, "Must provide dt_list_train for continuous Koopman"
+        if input_dict["data_files_val"][0] is not None:
+            assert input_dict["time_init_list_val"][0] is not None, "Must provide time_init_list_val for continuous Koopman"
+            assert input_dict["dt_list_val"][0] is not None, "Must provide dt_list_val for continuous Koopman"
+
         super().__init__(input_dict, mllib, network_suffix)
 
         # TODO: handle separate training, blech
@@ -58,16 +65,41 @@ class KoopmanAEPan2020(AEROM):
     ):
         """Call custom training loop after organizing data"""
 
-        # get time series windows
+        # get solution time series windows
         seq_length = params["seq_length"]
         seq_step = params["seq_step"]
         data_list_train_seqs = hankelize(data_list_train, seq_length, seq_step=seq_step)
         data_list_val_seqs = hankelize(data_list_val, seq_length, seq_step=seq_step)
 
+        # get time value windows
+        time_values_list_train, time_diffs_list_train = [], []
+        time_values_list_val, time_diffs_list_val = [], []
+        # if split came directly from training sets
+        if input_dict["data_files_val"][0] is None:
+            for set_idx in range(len(data_list_train)):
+                time_values, _ = calc_time_values(
+                    input_dict["time_init_list_train"][set_idx],
+                    input_dict["dt_list_train"][set_idx],
+                    input_dict["idx_start_list_train"][set_idx],
+                    input_dict["idx_end_list_train"][set_idx],
+                    input_dict["idx_skip_list_train"][set_idx],
+                )
+                time_values_list_train.append(time_values[input_dict["split_idxs_train"][set_idx]])
+                time_values_list_val.append(time_values[input_dict["split_idxs_val"][set_idx]])
+        else:
+            raise ValueError("Time value calcs for separate val sets not implemented")
+
+        time_values_list_train_seqs = hankelize(time_values_list_train, seq_length, seq_step=seq_step)
+        time_values_list_val_seqs = hankelize(time_values_list_val, seq_length, seq_step=seq_step)
+
         # concatenate and shuffle sequences
         data_train_seqs = np.concatenate(data_list_train_seqs, axis=0)
         data_val_seqs = np.concatenate(data_list_val_seqs, axis=0)
-        np.random.shuffle(data_train_seqs)
+        time_values_train_seqs = np.concatenate(time_values_list_train_seqs, axis=0)
+        time_values_val_seqs = np.concatenate(time_values_list_val_seqs, axis=0)
+        shuffle_idxs = np.random.permutation(np.arange(data_train_seqs.shape[0]))
+        data_train_seqs = data_train_seqs[shuffle_idxs, ...]
+        time_values_train_seqs = time_values_train_seqs[shuffle_idxs, ...]
 
         # get source list
         self.grad_source_list = [
@@ -76,7 +108,6 @@ class KoopmanAEPan2020(AEROM):
             self.time_stepper.stepper.model_obj,
         ]
 
-        raise ValueError
         loss_train_hist, loss_val_hist, loss_addtl_train_list, loss_addtl_val_list = self.mllib.train_model_custom(
             self,
             data_train_seqs,
@@ -88,6 +119,9 @@ class KoopmanAEPan2020(AEROM):
             options,
             params,
             param_prefix,
+            continuous=True,
+            time_values_train=time_values_train_seqs,
+            time_values_val=time_values_val_seqs,
         )
 
         self.loss_train_recon = loss_addtl_train_list[0]
@@ -95,7 +129,6 @@ class KoopmanAEPan2020(AEROM):
         self.loss_val_recon = loss_addtl_val_list[0]
         self.loss_val_step = loss_addtl_val_list[1]
 
-        # TODO: adjust this value if
         loss_train = loss_train_hist[-1]
         loss_val = loss_val_hist[-1]
 

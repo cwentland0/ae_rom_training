@@ -61,16 +61,17 @@ class Koopman(TimeStepper):
 
         # get I/O shapes
         koopman_input_shape, _ = self.mllib.get_layer_io_shape(self.stepper.model_obj, 0)
-        _, koopman_output_shape = self.mllib.get_layer_io_shape(self.stepper.model_obj, -1)
+        koopman_op_input_shape, koopman_op_output_shape = self.mllib.get_layer_io_shape(self.stepper.model_obj, -1)
 
         # check shapes
         latent_shape = (input_dict["latent_dim"],)
         assert koopman_input_shape == latent_shape, (
             "Koopman input shape does not match latent shape: " + str(koopman_input_shape) + " vs. " + str(latent_shape)
         )
-        assert koopman_output_shape == latent_shape, (
+
+        assert koopman_op_output_shape == latent_shape, (
             "Koopman output shape does not match latent shape: "
-            + str(koopman_output_shape)
+            + str(koopman_op_output_shape)
             + " vs. "
             + str(latent_shape)
         )
@@ -78,6 +79,8 @@ class Koopman(TimeStepper):
         # check continuous implementation
         if self.continuous:
             time_input_shape, time_output_shape =  self.mllib.get_layer_io_shape(self.stepper.model_obj, 1)
+            assert koopman_op_input_shape[0] == latent_shape
+            assert koopman_op_input_shape[1] == (1,)
             assert time_input_shape == (1,), "Something went wrong in providing time input to continuous Koopman layer"
             assert time_output_shape == (1,), "Something went wrong in providing time input to continuous Koopman layer"
 

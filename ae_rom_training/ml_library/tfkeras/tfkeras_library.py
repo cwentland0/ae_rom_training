@@ -315,7 +315,7 @@ class TFKerasLibrary(MLLibrary):
             stable=stable,
             kernel_initializer=kern_init,
             name=name,
-        )(layer_input, time_input)
+        )([layer_input, time_input])
 
         return [time_input, layer_output]
 
@@ -374,10 +374,21 @@ class TFKerasLibrary(MLLibrary):
 
     def get_layer_io_shape(self, model_obj, layer_idx):
 
-        input_shape = get_shape_tuple(model_obj.layers[layer_idx].input_shape)[1:]
-        output_shape = get_shape_tuple(model_obj.layers[layer_idx].output_shape)[1:]
+        input_shapes = get_shape_tuple(model_obj.layers[layer_idx].input_shape)
+        output_shapes = get_shape_tuple(model_obj.layers[layer_idx].output_shape)
 
-        return input_shape, output_shape
+        # strip batch dimension, deal with multiple input layers
+        if isinstance(input_shapes, list):
+            input_shapes = [shape[1:] for shape in input_shapes]
+        else:
+            input_shapes = input_shapes[1:]
+
+        if isinstance(output_shapes, list):
+            output_shapes = [shape[1:] for shape in output_shapes]
+        else:
+            output_shapes = output_shapes[1:]
+
+        return input_shapes, output_shapes
 
     def build_model_obj(self, tensor_list, input_idx_list):
 
@@ -387,7 +398,9 @@ class TFKerasLibrary(MLLibrary):
         for input_idx in input_idx_list:
             input_list.append(tensor_list[input_idx])
 
-        return Model(input_list, tensor_list[-1])
+        model = Model(input_list, tensor_list[-1])
+
+        return model
 
     def display_model_summary(self, model_obj, displaystr=None):
 
@@ -509,8 +522,13 @@ class TFKerasLibrary(MLLibrary):
         options,
         params,
         param_prefix,
+        continuous=False,
+        time_values_train=None,
+        time_values_val=None,
         **kwargs,
     ):
+
+        # TODO: could roll time values into data_input_train, make it a dict?
 
         batch_size = params[param_prefix + "batch_size"]
         max_epochs = params[param_prefix + "max_epochs"]
@@ -518,6 +536,11 @@ class TFKerasLibrary(MLLibrary):
         loss_val_hist = np.zeros(max_epochs)
         loss_addtl_train_list = []
         loss_addtl_val_list = []
+
+        # deal with needing time values for continuous models
+        if not continuous:
+            continuous = False
+            time_values_train_batch = None
 
         # get batch iterator
         # assumed that leading dimension of data is batch dimension
@@ -548,9 +571,19 @@ class TFKerasLibrary(MLLibrary):
                 data_input_train_batch = data_input_train[start:end, ...]
                 data_output_train_batch = data_output_train[start:end, ...]
 
+                if continuous:
+                    time_values_train_batch = time_values_train[start:end, ...]
+
                 # compute gradients and back-propagate
                 with tf.GradientTape() as tape:
-                    loss_train_list = loss(data_input_train_batch, data_output_train_batch, ae_rom, **kwargs)
+                    loss_train_list = loss(
+                        data_input_train_batch,
+                        data_output_train_batch,
+                        ae_rom,
+                        continuous=continuous,
+                        time_values=time_values_train_batch,
+                        **kwargs,
+                        )
                     loss_train = loss_train_list[0]
                 grad = tape.gradient(target=loss_train, sources=trainable_vars)
                 optimizer.apply_gradients(zip(grad, trainable_vars))
@@ -559,7 +592,14 @@ class TFKerasLibrary(MLLibrary):
                     progbar.update(num_samps, values=[("loss", loss_train.numpy()), ("val_loss", loss_val.numpy())])
 
             # Compute validation loss
-            loss_val_list = loss(data_input_val, data_output_val, ae_rom)
+            loss_val_list = loss(
+                data_input_val,
+                data_output_val,
+                ae_rom,
+                continuous=continuous,
+                time_values=time_values_val,
+                **kwargs,
+            )
             loss_val = loss_val_list[0]
             progbar.update(num_samps, values=[("loss", loss_train.numpy()), ("val_loss", loss_val.numpy())])
 
@@ -594,7 +634,7 @@ class TFKerasLibrary(MLLibrary):
         Retrieval of K is handled within layer.
         """
 
-        return model_obj.layers[1].get_koopman_numpy()
+        return model_obj.layers[-1].get_koopman_numpy()
 
 
     def save_model(self, model_obj, save_path, save_h5=True):
