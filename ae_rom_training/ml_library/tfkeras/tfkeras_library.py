@@ -299,23 +299,14 @@ class TFKerasLibrary(MLLibrary):
         return layer_output, added_flatten
 
     def get_continuous_koopman_layer(
-        self,
-        layer_input,
-        output_size,
-        num_input_layers,
-        stable=False,
-        kern_init="glorot_uniform",
-        name=None,
+        self, layer_input, output_size, num_input_layers, stable=False, kern_init="glorot_uniform", name=None,
     ):
 
         time_input = self.get_input_layer((1,), name="input_" + str(num_input_layers))
 
-        layer_output = ContinuousKoopman(
-            output_size,
-            stable=stable,
-            kernel_initializer=kern_init,
-            name=name,
-        )([layer_input, time_input])
+        layer_output = ContinuousKoopman(output_size, stable=stable, kernel_initializer=kern_init, name=name,)(
+            [layer_input, time_input]
+        )
 
         return [time_input, layer_output]
 
@@ -494,7 +485,7 @@ class TFKerasLibrary(MLLibrary):
 
         batch_size = params[param_prefix + "batch_size"]
         max_epochs = params[param_prefix + "max_epochs"]
-        model_obj.fit(
+        history = model_obj.fit(
             x=data_input_train,
             y=data_output_train,
             batch_size=int(batch_size),
@@ -507,8 +498,10 @@ class TFKerasLibrary(MLLibrary):
         # report training and validation loss
         loss_train = self.calc_loss(model_obj, data_input_train, data_output_train)
         loss_val = self.calc_loss(model_obj, data_input_val, data_output_val)
+        loss_train_hist = np.array(history.history["loss"])
+        loss_val_hist = np.array(history.history["val_loss"])
 
-        return loss_train, loss_val
+        return loss_train_hist, loss_val_hist, loss_train, loss_val
 
     def train_model_custom(
         self,
@@ -583,7 +576,7 @@ class TFKerasLibrary(MLLibrary):
                         continuous=continuous,
                         time_values=time_values_train_batch,
                         **kwargs,
-                        )
+                    )
                     loss_train = loss_train_list[0]
                 grad = tape.gradient(target=loss_train, sources=trainable_vars)
                 optimizer.apply_gradients(zip(grad, trainable_vars))
@@ -593,12 +586,7 @@ class TFKerasLibrary(MLLibrary):
 
             # Compute validation loss
             loss_val_list = loss(
-                data_input_val,
-                data_output_val,
-                ae_rom,
-                continuous=continuous,
-                time_values=time_values_val,
-                **kwargs,
+                data_input_val, data_output_val, ae_rom, continuous=continuous, time_values=time_values_val, **kwargs,
             )
             loss_val = loss_val_list[0]
             progbar.update(num_samps, values=[("loss", loss_train.numpy()), ("val_loss", loss_val.numpy())])
@@ -630,12 +618,11 @@ class TFKerasLibrary(MLLibrary):
     def get_koopman(self, model_obj):
         """Compatability layer to get Koopman operator from continuous Koopman model.
         
-        model_obj is assumed to have two layers: Input and ContinuousKoopman.
-        Retrieval of K is handled within layer.
+        model_obj is assumed to have three layers: Two Input (latent variables and time) and ContinuousKoopman.
+        Retrieval of K is handled within custom layer.
         """
 
         return model_obj.layers[-1].get_koopman_numpy()
-
 
     def save_model(self, model_obj, save_path, save_h5=True):
         """Save Tensorflow model object.

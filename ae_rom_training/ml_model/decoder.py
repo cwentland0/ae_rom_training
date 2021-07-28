@@ -15,11 +15,12 @@ class Decoder(MLModel):
 
         # reverse order of layer definitions
         self.layer_params_list = encoder.layer_params_list[::-1].copy()
-        self.num_layers = len(self.layer_params_list)
+        self.num_layers_total = len(self.layer_params_list)
+        self.num_layers = encoder.num_layers
 
         for decoder_layer_idx, layer_dict in enumerate(self.layer_params_list):
 
-            encoder_layer_idx = encoder.num_layers - decoder_layer_idx - 1
+            encoder_layer_idx = encoder.num_layers_total - decoder_layer_idx - 1
             encoder_layer_type = encoder_layer_types[encoder_layer_idx]
             encoder_layer_input_shape, encoder_layer_output_shape = self.mllib.get_layer_io_shape(
                 encoder.model_obj, encoder_layer_idx
@@ -53,7 +54,7 @@ class Decoder(MLModel):
             else:
                 raise ValueError("Unexpected encoder layer type during decoder mirroring: " + encoder_layer_type)
 
-            if decoder_layer_idx == (self.num_layers - 1):
+            if decoder_layer_idx == (self.num_layers_total - 1):
                 try:
                     final_activation = input_dict["decoder_final_activation"]
                     layer_dict["activation"] = final_activation

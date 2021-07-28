@@ -18,10 +18,14 @@ class KoopmanAEPan2020(AEROM):
         self.time_stepper = Koopman(input_dict, mllib, continuous=True)
 
         # check that time inputs are present
-        assert input_dict["time_init_list_train"][0] is not None, "Must provide time_init_list_train for continuous Koopman"
+        assert (
+            input_dict["time_init_list_train"][0] is not None
+        ), "Must provide time_init_list_train for continuous Koopman"
         assert input_dict["dt_list_train"][0] is not None, "Must provide dt_list_train for continuous Koopman"
         if input_dict["data_files_val"][0] is not None:
-            assert input_dict["time_init_list_val"][0] is not None, "Must provide time_init_list_val for continuous Koopman"
+            assert (
+                input_dict["time_init_list_val"][0] is not None
+            ), "Must provide time_init_list_val for continuous Koopman"
             assert input_dict["dt_list_val"][0] is not None, "Must provide dt_list_val for continuous Koopman"
 
         super().__init__(input_dict, mllib, network_suffix)
@@ -53,15 +57,7 @@ class KoopmanAEPan2020(AEROM):
         np.save(loss_val_step_path, self.loss_val_step)
 
     def train_model_custom(
-        self,
-        data_list_train,
-        data_list_val,
-        optimizer,
-        loss,
-        options,
-        input_dict,
-        params,
-        param_prefix,
+        self, data_list_train, data_list_val, optimizer, loss, options, input_dict, params, param_prefix,
     ):
         """Call custom training loop after organizing data"""
 
@@ -92,11 +88,23 @@ class KoopmanAEPan2020(AEROM):
         time_values_list_train_seqs = hankelize(time_values_list_train, seq_length, seq_step=seq_step)
         time_values_list_val_seqs = hankelize(time_values_list_val, seq_length, seq_step=seq_step)
 
-        # concatenate and shuffle sequences
+        # concatenate sequences
         data_train_seqs = np.concatenate(data_list_train_seqs, axis=0)
         data_val_seqs = np.concatenate(data_list_val_seqs, axis=0)
         time_values_train_seqs = np.concatenate(time_values_list_train_seqs, axis=0)
         time_values_val_seqs = np.concatenate(time_values_list_val_seqs, axis=0)
+
+        # compute time ELAPSED over sequences
+        time_values_train_seqs -= time_values_train_seqs[:, [0], :]
+        time_values_val_seqs -= time_values_val_seqs[:, [0], :]
+
+        # non-dimensionalize time, to avoid truncation error
+        # TODO: automatic way of doing this?
+        dt_nondim = input_dict["dt_nondim"]
+        time_values_train_seqs /= dt_nondim
+        time_values_val_seqs /= dt_nondim
+
+        # shuffle training sequences
         shuffle_idxs = np.random.permutation(np.arange(data_train_seqs.shape[0]))
         data_train_seqs = data_train_seqs[shuffle_idxs, ...]
         time_values_train_seqs = time_values_train_seqs[shuffle_idxs, ...]

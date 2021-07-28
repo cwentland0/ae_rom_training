@@ -20,7 +20,7 @@ LAYER_PARAM_DICT = {
     "activation": [str, nan],  # layer activation
     "num_filters": [int, nan],
     "strides": [(int,), nan],  # stride length for convolutional layers
-    "dilation": [(int,), nan],  # dilation size for convolutional layers
+    "dilation": [int, 1],  # dilation size for convolutional layers
     "padding": [str, "same"],  # padding type for convolutional layers
     "kern_size": [int, nan],  # uniform kernel size
     "kern_reg": [str, None],  # weight regularization type

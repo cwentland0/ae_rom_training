@@ -58,7 +58,7 @@ class Autoencoder:
             + " vs. "
             + str(latent_shape)
         )
-        print("ENCODER passed I/O checks!")
+        print("\nENCODER passed I/O checks!")
 
         assert decoder_input_shape == latent_shape, (
             "Decoder input shape does not match latent shape: " + str(decoder_input_shape) + " vs. " + str(latent_shape)
@@ -66,7 +66,7 @@ class Autoencoder:
         assert decoder_output_shape == data_shape, (
             "Decoder output shape does not match data shape: " + str(decoder_output_shape) + " vs. " + str(data_shape)
         )
-        print("DECODER passed I/O checks!")
+        print("\nDECODER passed I/O checks!")
 
     def save(self, model_dir, network_suffix):
         """Save encoder and decoder models.

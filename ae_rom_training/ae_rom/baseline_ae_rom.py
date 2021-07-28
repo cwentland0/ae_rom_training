@@ -1,3 +1,4 @@
+import os
 import numpy as np
 
 from ae_rom_training.ae_rom.ae_rom import AEROM
@@ -22,15 +23,7 @@ class BaselineAEROM(AEROM):
         self.model_obj = self.autoencoder.model_obj
 
     def train_model_builtin(
-        self,
-        data_list_train,
-        data_list_val,
-        optimizer,
-        loss,
-        options,
-        input_dict,
-        params,
-        param_prefix,
+        self, data_list_train, data_list_val, optimizer, loss, options, input_dict, params, param_prefix,
     ):
 
         # concatenate and shuffle data sets, since order doesn't matter
@@ -39,7 +32,7 @@ class BaselineAEROM(AEROM):
         np.random.shuffle(data_train)
 
         # train
-        self.mllib.train_model_builtin(
+        self.loss_train_hist, self.loss_val_hist, loss_train, loss_val = self.mllib.train_model_builtin(
             self.model_obj,
             data_train,
             data_train,
@@ -53,6 +46,8 @@ class BaselineAEROM(AEROM):
             param_prefix,
         )
 
+        return loss_train, loss_val
+
     def train_model_custom(self):
 
         raise ValueError("Custom training loop not implemented for BaselineAEROM")
@@ -61,3 +56,8 @@ class BaselineAEROM(AEROM):
         """Save individual networks in AE ROM"""
 
         self.autoencoder.save(model_dir, self.network_suffix)
+
+        loss_train_hist_path = os.path.join(model_dir, "loss_train_hist" + self.network_suffix + ".npy")
+        loss_val_hist_path = os.path.join(model_dir, "loss_val_hist" + self.network_suffix + ".npy")
+        np.save(loss_train_hist_path, self.loss_train_hist)
+        np.save(loss_val_hist_path, self.loss_val_hist)

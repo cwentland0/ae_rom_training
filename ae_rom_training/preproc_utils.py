@@ -108,13 +108,14 @@ def read_input_file(input_file):
     input_dict["idx_skip_list_val"] = catch_input(input_dict_raw, "idx_skip_list_val", [None])
     input_dict["time_init_list_val"] = catch_input(input_dict_raw, "time_init_list_val", [None])
     input_dict["dt_list_val"] = catch_input(input_dict_raw, "dt_list_val", [None])
+    input_dict["dt_nondim"] = catch_input(input_dict_raw, "dt_nondim", 1.0e-6)  # time non-dimensionalization
     input_dict["data_order"] = input_dict_raw["data_order"]
     input_dict["network_order"] = catch_input(input_dict_raw, "network_order", "NHWC")
     input_dict["network_suffixes"] = [""] * input_dict["num_networks"]
     for i, net_idxs in enumerate(input_dict["var_network_idxs"]):
         for j, idx in enumerate(net_idxs):
             input_dict["network_suffixes"][i] += "_" + str(idx)
-    
+
     num_datasets_train = len(input_dict["data_files_train"])
     if len(input_dict["idx_start_list_train"]) == 1:
         input_dict["idx_start_list_train"] *= num_datasets_train
@@ -126,7 +127,7 @@ def read_input_file(input_file):
         input_dict["time_init_list_train"] *= num_datasets_train
     if len(input_dict["dt_list_train"]) == 1:
         input_dict["dt_list_train"] *= num_datasets_train
-    
+
     if input_dict["data_files_val"][0] is not None:
         num_datasets_val = len(input_dict["data_files_val"])
         if len(input_dict["idx_start_list_val"]) == 1:
@@ -360,7 +361,9 @@ def preproc_raw_data(
 
         # if centering by initial condition, center here
         if centering_scheme == "init_cond":
-            data_list_train_var_cent, _ = center_data_set(data_list_train_var, centering_scheme, model_dir, network_suffix, save_cent=True)
+            data_list_train_var_cent, _ = center_data_set(
+                data_list_train_var, centering_scheme, model_dir, network_suffix, save_cent=True
+            )
 
         # concatenate samples after centering
         for dataset_num, data_arr in enumerate(data_list_train_var_cent):
@@ -397,8 +400,12 @@ def preproc_raw_data(
 
     # if not centering by initial condition, center here
     if centering_scheme != "init_cond":
-        data_list_train, cent_prof = center_data_set(data_list_train, centering_scheme, model_dir, network_suffix, save_cent=True)
-        data_list_val, _ = center_data_set(data_list_val, centering_scheme, model_dir, network_suffix, cent_prof=cent_prof, save_cent=False)
+        data_list_train, cent_prof = center_data_set(
+            data_list_train, centering_scheme, model_dir, network_suffix, save_cent=True
+        )
+        data_list_val, _ = center_data_set(
+            data_list_val, centering_scheme, model_dir, network_suffix, cent_prof=cent_prof, save_cent=False
+        )
 
     # normalize training and validation sets separately
     data_list_train, norm_sub_train, norm_fac_train = normalize_data_set(
@@ -424,6 +431,7 @@ def calc_time_values(time_start, dt, idx_start, idx_end, idx_skip, shuffle_idxs=
 
     return time_values, time_diffs
 
+
 def center_switch(data: list, cent_type):
     """Computes centering profile(s) for data
     
@@ -447,11 +455,12 @@ def center_switch(data: list, cent_type):
     # no centering
     elif cent_type == "none":
         cent_prof = [np.zeros((1,) + data_arr.shape[1:], dtype=data_arr.dtype) for data_arr in data]
-    
+
     else:
         raise ValueError("Invalid choice of cent_type: " + cent_type)
 
     return cent_prof
+
 
 def center_data_set(data: list, cent_type, model_dir, network_suffix, cent_prof=None, save_cent=False):
     """Center data set about some profile.
@@ -473,7 +482,9 @@ def center_data_set(data: list, cent_type, model_dir, network_suffix, cent_prof=
         if cent_type == "init_cond":
             for idx, prof in enumerate(cent_prof):
                 cent_prof_out = np.squeeze(prof, axis=0)
-                np.save(os.path.join(model_dir, "cent_prof_dataset" + str(idx) + network_suffix + ".npy"), cent_prof_out)
+                np.save(
+                    os.path.join(model_dir, "cent_prof_dataset" + str(idx) + network_suffix + ".npy"), cent_prof_out
+                )
         else:
             cent_prof_out = np.squeeze(cent_prof, axis=0)
             np.save(os.path.join(model_dir, "cent_prof" + network_suffix + ".npy"), cent_prof_out)
@@ -490,7 +501,9 @@ def split_data_set(data, split_type, val_perc):
 
     if split_type == "random":
         indices = np.arange(data.shape[0])
-        data_train, data_val, idxs_train, idxs_val = train_test_split(data, indices, test_size=val_perc, random_state=RANDOM_SEED)
+        data_train, data_val, idxs_train, idxs_val = train_test_split(
+            data, indices, test_size=val_perc, random_state=RANDOM_SEED
+        )
 
     elif split_type == "series_random":
         train_tresh = int(data.shape[0] * (1.0 - val_perc))
@@ -521,14 +534,14 @@ def hankelize(data: list, seq_length, seq_step=1):
         # accommodate single-value sequences, actually need to keep this for layer inputs
         if num_dims == 1:
             data_arr = np.expand_dims(data_arr, axis=-1)
-        
+
         # extract windows
         num_seqs = ceil((num_snaps - seq_length + 1) / seq_step)
         data_seqs.append(np.zeros((num_seqs, seq_length,) + data_arr.shape[1:], dtype=data_arr.dtype))
         for seq_idx in range(num_seqs):
             idx_start = seq_idx * seq_step
             idx_end = idx_start + seq_length
-            data_seqs[-1][seq_idx, ...] = data_arr[idx_start : idx_end, ...]
+            data_seqs[-1][seq_idx, ...] = data_arr[idx_start:idx_end, ...]
 
         # account for final window
         if idx_end != num_snaps:

@@ -24,8 +24,6 @@ class MLModel:
         # layer_list contains all outputs of layer calls
         # layer list should have dicts which have all the parameters needed for a given layer
         # also, should specify which layer (in the list order) is its input
-        self.layer_list = []
-        self.layer_params_list = []
 
     def preproc_layer_input(self, input_dict, params):
         """Do error checking and input expansions on layer inputs.
@@ -33,6 +31,8 @@ class MLModel:
         If not using HyperOpt, then everything is already set by preproc_inputs
         and everything just gets moved into layer_params_list.
         """
+
+        self.layer_params_list = []
 
         # Get layer lists or expand single inputs
         # params has already been preprocessed to be in the proper format
@@ -100,8 +100,10 @@ class MLModel:
 
         # start off with input layer
         input_idx_list = [0]
+        self.layer_list = []
         self.layer_list.append(self.mllib.get_input_layer(input_shape, batch_size=batch_size, name="input_0"))
-        self.num_layers += 1
+        self.num_layers_total = self.num_layers
+        self.num_layers_total += 1
 
         input_count = 1
         conv_count, trans_conv_count = 0, 0
@@ -209,7 +211,7 @@ class MLModel:
                     input_count,
                     stable=layer_dict["stable"],
                     kern_init=layer_dict["kern_init"],
-                    name="koopman_continuous_" + str(koopman_continuous_count)
+                    name="koopman_continuous_" + str(koopman_continuous_count),
                 )
                 addtl_layer_idxs.append(layer_idx + self.num_addtl_layers)
                 input_idx_list.append(layer_idx + self.num_addtl_layers + 1)
@@ -238,7 +240,7 @@ class MLModel:
                 self.layer_list.append(layer_output)
 
         # account for any layers added silently
-        self.num_layers += self.num_addtl_layers
+        self.num_layers_total += self.num_addtl_layers
         for layer_idx in addtl_layer_idxs:
             self.layer_params_list.insert(layer_idx, "addtl_layer")
 

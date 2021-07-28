@@ -282,6 +282,9 @@ class AEROM:
 
         self.build()  # finish building
 
+        if input_dict["use_hyperopt"]:
+            self.print_aerom_hyperopt_sample(params, ae=ae, ts=ts)
+
         # prefix for grabbing training parameters
         if ae:
             if ts:
@@ -294,7 +297,10 @@ class AEROM:
         # train network, finally
         time_start = time()
         loss_train, loss_val = self.train(input_dict, params, data_list_train, data_list_val, param_prefix=param_prefix)
-        eval_time = time() - time_start
+        train_time = time() - time_start
+        print("===========================================")
+        print("Training complete in " + str(train_time) + " seconds")
+        print("===========================================")
 
         # check if this model is the best so far, if so save
         self.check_best(input_dict, loss_val, params)
@@ -304,7 +310,7 @@ class AEROM:
             "loss": loss_train,  # training loss at end of training
             "true_loss": loss_val,  # validation loss at end of training
             "status": STATUS_OK,  # check for correct exit
-            "eval_time": eval_time,  # time (in seconds) to train model
+            "eval_time": train_time,  # time (in seconds) to train model
         }
 
     def train(self, input_dict, params, data_list_train, data_list_val, param_prefix=""):
@@ -325,14 +331,7 @@ class AEROM:
         # Built-in training method implemented in ML library
         if self.train_builtin:
             loss_train, loss_val = self.train_model_builtin(
-                data_list_train,
-                data_list_val,
-                optimizer,
-                loss,
-                options,
-                input_dict,
-                params,
-                param_prefix,
+                data_list_train, data_list_val, optimizer, loss, options, input_dict, params, param_prefix,
             )
 
         # Custom training method is implemented by child class
@@ -346,29 +345,33 @@ class AEROM:
     def print_aerom_hyperopt_sample(self, params, ae=False, ts=False):
         """Display current Hyperopt selection"""
 
-        print("========================")
+        print("\n=================================================================")
         print("CURRENT PARAMETER SAMPLE")
-        print("========================")
+        print("=================================================================")
 
-        print("training parameters")
-        print("-------------------")
-        for param_key in self.hyperopt_param_names:
-            print(param_key + ": " + str(params[param_key]))
+        if self.hyperopt_param_names:
+            print("-------------------")
+            print("training parameters")
+            print("-------------------")
+            for param_key in self.hyperopt_param_names:
+                print("-> " + param_key + ": " + str(params[param_key]))
 
         if ae:
             self.print_component_hyperopt_sample(params, self.autoencoder)
         if ts:
             self.print_component_hyperopt_sample(params, self.time_stepper)
 
-        print("========================")
+        print("=================================================================\n")
 
     def print_component_hyperopt_sample(self, params, component):
 
         for network in component.component_networks:
-            print(network.param_prefix + " parameters")
-            print("-------------------")
-            for param_key in network.hyperopt_param_names:
-                print(param_key + ": " + str(params[param_key]))
+            if network.hyperopt_param_names:
+                print("-------------------")
+                print(network.param_prefix + " parameters")
+                print("-------------------")
+                for param_key in network.hyperopt_param_names:
+                    print("-> " + param_key + ": " + str(params[param_key]))
 
     def check_best(self, input_dict, loss_val, params):
 

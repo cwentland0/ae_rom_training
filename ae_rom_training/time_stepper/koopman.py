@@ -39,7 +39,6 @@ class Koopman(TimeStepper):
     #     v_0 = v_0.conj().T[:, :num_modes]
 
     #     dmd_op = u_0.conj().T @ data_1 @ v_0
-    #     breakpoint()
 
     # def init_from_dmd(self, data, num_modes):
     #     pass
@@ -78,13 +77,13 @@ class Koopman(TimeStepper):
 
         # check continuous implementation
         if self.continuous:
-            time_input_shape, time_output_shape =  self.mllib.get_layer_io_shape(self.stepper.model_obj, 1)
+            time_input_shape, time_output_shape = self.mllib.get_layer_io_shape(self.stepper.model_obj, 1)
             assert koopman_op_input_shape[0] == latent_shape
             assert koopman_op_input_shape[1] == (1,)
             assert time_input_shape == (1,), "Something went wrong in providing time input to continuous Koopman layer"
             assert time_output_shape == (1,), "Something went wrong in providing time input to continuous Koopman layer"
 
-        print("KOOPMAN passed I/O checks!")
+        print("\nKOOPMAN passed I/O checks!")
 
     def save(self, model_dir, network_suffix):
 

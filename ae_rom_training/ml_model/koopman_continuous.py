@@ -21,7 +21,7 @@ class KoopmanContinuous(MLModel):
         input_dict[param_prefix + "_bias_reg"] = None
         input_dict[param_prefix + "_bias_reg_val"] = 0.0
         input_dict[param_prefix + "_bias_init"] = None
-        
+
         # Check if initializing by DMD. If so, just initialize with Glorot for now, handle later
         self.init_dmd = False
         if param_prefix + "_kern_init" in input_dict:
@@ -36,7 +36,6 @@ class KoopmanContinuous(MLModel):
             input_dict[param_prefix + "_kern_init"] = ["glorot_uniform"]
 
         super().__init__(param_prefix, mllib)
-
 
     def get_koopman(self):
         """Retrieve linear operator from model object."""

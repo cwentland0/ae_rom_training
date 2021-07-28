@@ -68,7 +68,7 @@ def main():
         data_list_val_net = data_list_val[net_idx]
         input_dict["split_idxs_train"] = split_idxs_list_train[net_idx]
         input_dict["split_idxs_val"] = split_idxs_list_val[net_idx]
-        
+
         aerom = aerom_list[net_idx]
 
         if input_dict["use_hyperopt"]:
@@ -76,9 +76,28 @@ def main():
             print("Performing hyper-parameter optimization!")
 
             # wrap objective function to pass additional arguments
-            objective_func_wrapped = partial(
-                aerom.build_and_train, input_dict=input_dict, data_list_train=data_list_train_net, data_list_val=data_list_val_net,
-            )
+            if (aerom.time_stepper is None) or (
+                (aerom.time_stepper is not None) and (aerom.training_format == "separate")
+            ):
+                objective_func_wrapped = partial(
+                    aerom.build_and_train,
+                    input_dict=input_dict,
+                    data_list_train=data_list_train_net,
+                    data_list_val=data_list_val_net,
+                    ae=True,
+                )
+
+            elif (aerom.time_stepper is not None) and (aerom.training_format == "combined"):
+                objective_func_wrapped = partial(
+                    aerom.build_and_train,
+                    input_dict=input_dict,
+                    data_list_train=data_list_train_net,
+                    data_list_val=data_list_val_net,
+                    ae=True,
+                    ts=True,
+                )
+            else:
+                raise ValueError("Something unexpected happened in selecting build_and_train")
 
             # find "best" model according to specified hyperparameter optimization algorithm
             trials = Trials()
@@ -109,11 +128,18 @@ def main():
             if (aerom.time_stepper is None) or (
                 (aerom.time_stepper is not None) and (aerom.training_format == "separate")
             ):
-                best = aerom.build_and_train(aerom.param_space, input_dict, data_list_train_net, data_list_val_net, ae=True)
+                best = aerom.build_and_train(
+                    aerom.param_space, input_dict, data_list_train_net, data_list_val_net, ae=True
+                )
 
             # train autoencoder and time stepper together
             elif (aerom.time_stepper is not None) and (aerom.training_format == "combined"):
-                best = aerom.build_and_train(aerom.param_space, input_dict, data_list_train_net, data_list_val_net, ae=True, ts=True)
+                best = aerom.build_and_train(
+                    aerom.param_space, input_dict, data_list_train_net, data_list_val_net, ae=True, ts=True
+                )
+
+            else:
+                raise ValueError("Something unexpected happened in selecting build_and_train")
 
             best_space = aerom.param_space
 

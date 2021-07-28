@@ -14,15 +14,13 @@ class ContinuousKoopman(Layer):
 
     def build(self, input_shape):
 
-        assert (input_shape[0].rank == 2) and (input_shape[1].rank == 2), (
-            "Input to continuous Koopman is not two-dimensional (batch, output_size)"
-        )
+        assert (input_shape[0].rank == 2) and (
+            input_shape[1].rank == 2
+        ), "Input to continuous Koopman is not two-dimensional (batch, output_size)"
         assert input_shape[0][-1] == self.output_size, (
             "Input to continuous Koopman does not have " + str(self.output_size) + " units, as expected"
         )
-        assert input_shape[1][-1] == 1, (
-            "Time input to continuous Koopman does not have 1 unit, as expected"
-        )
+        assert input_shape[1][-1] == 1, "Time input to continuous Koopman does not have 1 unit, as expected"
 
         if self.stable:
             self.diag = self.add_weight(
@@ -35,7 +33,9 @@ class ContinuousKoopman(Layer):
 
         else:
 
-            self.K = self.add_weight(shape=(self.output_size, self.output_size), initializer=self.kernel_initializer, trainable=True)
+            self.K = self.add_weight(
+                shape=(self.output_size, self.output_size), initializer=self.kernel_initializer, trainable=True
+            )
 
     def set_tridiag(self):
         self.K = (
@@ -53,7 +53,9 @@ class ContinuousKoopman(Layer):
 
     def get_config(self):
         config = super().get_config()
-        config.update({"output_size": self.output_size, "stable": self.stable, "kernel_initializer": self.kernel_initializer})
+        config.update(
+            {"output_size": self.output_size, "stable": self.stable, "kernel_initializer": self.kernel_initializer}
+        )
 
     def call(self, inputs):
         """Computes continuous Koopman operation, inputs @ exp(Dt * K)
@@ -65,7 +67,7 @@ class ContinuousKoopman(Layer):
         if self.stable:
             self.set_tridiag()
 
-        # compute continuous Koopman operator 
+        # compute continuous Koopman operator
         exp = tf.linalg.expm(tf.expand_dims(inputs[1], axis=-1) * tf.expand_dims(self.K, axis=0))
 
         # compute prediction

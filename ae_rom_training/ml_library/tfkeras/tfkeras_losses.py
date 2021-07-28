@@ -25,12 +25,9 @@ def ae_ts_combined_error(data_seq, data_seq_ignore, ae_rom, lookback=1, continuo
     seq_length = data_seq.shape[1]
     if continuous:
         assert lookback == 1, "lookback must be equal to 1 for continuous prediction"
-        assert time_values is not None, "If making continuous predictions, must provide step_sizes"
+        assert time_values is not None, "If making continuous predictions, must provide time_values"
         assert time_values.shape[1] == seq_length, (
-            "step_sizes length mismatch: is "
-            + str(time_values.shape[0])
-            + ", should be "
-            + str(seq_length)
+            "step_sizes length mismatch: is " + str(time_values.shape[0]) + ", should be " + str(seq_length)
         )
         time_values_tensor = tf.convert_to_tensor(time_values)
 
@@ -65,7 +62,9 @@ def ae_ts_combined_error(data_seq, data_seq_ignore, ae_rom, lookback=1, continuo
 
         # make time stepper prediction
         if continuous:
-            latent_vars_pred = ae_rom.time_stepper.stepper.model_obj([latent_vars_lookback, time_values_tensor[:, seq, ...]])
+            latent_vars_pred = ae_rom.time_stepper.stepper.model_obj(
+                [latent_vars_lookback, time_values_tensor[:, seq, ...]]
+            )
         else:
             latent_vars_pred = ae_rom.time_stepper.stepper.model_obj(latent_vars_lookback)
 
