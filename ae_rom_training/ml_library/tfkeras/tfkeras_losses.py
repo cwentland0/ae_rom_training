@@ -1,8 +1,5 @@
 import tensorflow as tf
-from tensorflow.python.keras.losses import MeanSquaredError, LossFunctionWrapper
-import tensorflow.python.keras.utils.losses_utils as losses_utils
-
-import matplotlib.pyplot as plt
+from tensorflow.python.keras.losses import MeanSquaredError
 
 
 def pure_l2(y_true, y_pred):
@@ -81,7 +78,7 @@ def ae_ts_combined_error(data_seq, data_seq_ignore, ae_rom, lookback=1, continuo
                 latent_vars_lookback = latent_vars_pred
             else:
                 latent_vars_lookback = tf.concat(
-                    [latent_vars_lookback[:, 1:, ...], tf.expand_dims(latent_vars_pred, axis=1)]
+                    [latent_vars_lookback[:, 1:, ...], tf.expand_dims(latent_vars_pred, axis=1)], axis=1,
                 )
 
     loss_recon /= seq_length

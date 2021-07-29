@@ -6,7 +6,6 @@ from ae_rom_training.preproc_utils import hankelize
 from ae_rom_training.ae_rom.ae_rom import AEROM
 from ae_rom_training.autoencoder.autoencoder import Autoencoder
 from ae_rom_training.time_stepper.koopman import Koopman
-from ae_rom_training.constants import FLOAT_TYPE
 
 
 class KoopmanAEOtto2019(AEROM):

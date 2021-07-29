@@ -1,5 +1,4 @@
 import os
-from time import time
 
 import numpy as np
 import tensorflow as tf
@@ -8,12 +7,12 @@ from tensorflow.keras import Input
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import Conv1D, Conv2D, Conv3D
 from tensorflow.keras.layers import Conv1DTranspose, Conv2DTranspose, Conv3DTranspose
+from tensorflow.keras.layers import LSTM
 from tensorflow.keras.layers import Flatten, Reshape
 from tensorflow.keras.regularizers import l1, l2
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.utils import Progbar
-from tensorflow.python.types.core import Value
 
 from ae_rom_training.constants import RANDOM_SEED, TRAIN_VERBOSITY
 from ae_rom_training.ml_library.ml_library import MLLibrary
@@ -309,6 +308,54 @@ class TFKerasLibrary(MLLibrary):
         )
 
         return [time_input, layer_output]
+
+    def get_lstm_layer(
+        self,
+        layer_input,
+        output_size,
+        return_sequences,
+        activation="tanh",
+        recurrent_activation="sigmoid",
+        use_bias=True,
+        kern_reg=None,
+        kern_reg_val=0.0,
+        act_reg=None,
+        act_reg_val=0.0,
+        bias_reg=None,
+        bias_reg_val=0.0,
+        recurrent_reg=None,
+        recurrent_reg_val=0.0,
+        kern_init="glorot_uniform",
+        bias_init="zeros",
+        recurrent_init="orthogonal",
+        name=None,
+    ):
+
+        # get regularizers, if requested
+        if kern_reg is not None:
+            kern_reg = self.get_regularization(kern_reg, kern_reg_val)
+        if act_reg is not None:
+            act_reg = self.get_regularization(act_reg, act_reg_val)
+        if bias_reg is not None:
+            bias_reg = self.get_regularization(bias_reg, bias_reg_val)
+        if recurrent_reg is not None:
+            recurrent_reg = self.get_regularization(recurrent_reg, recurrent_reg_val)
+
+        layer_output = LSTM(
+            output_size,
+            activation=activation,
+            recurrent_activation=recurrent_activation,
+            use_bias=use_bias,
+            kernel_initializer=kern_init,
+            recurrent_initializer=recurrent_init,
+            bias_initializer=bias_init,
+            kernel_regularizer=kern_reg,
+            recurrent_regularizer=recurrent_reg,
+            return_sequences=return_sequences,
+            name=name,
+        )(layer_input)
+
+        return layer_output
 
     def get_reshape_layer(self, layer_input, target_shape, name=None):
         """"Implement tensor input reshape."""
@@ -617,7 +664,7 @@ class TFKerasLibrary(MLLibrary):
 
     def get_koopman(self, model_obj):
         """Compatability layer to get Koopman operator from continuous Koopman model.
-        
+
         model_obj is assumed to have three layers: Two Input (latent variables and time) and ContinuousKoopman.
         Retrieval of K is handled within custom layer.
         """

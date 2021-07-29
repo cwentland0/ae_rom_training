@@ -3,7 +3,7 @@ from ae_rom_training.autoencoder.autoencoder import Autoencoder
 
 class BaselineAE(Autoencoder):
     """Standalone autoencoder, only encoder and decoder.
-    
+
     The main distinction with parent Autoencoder is the merging of the encoder and decoder for single-model training.
     """
 
@@ -21,10 +21,10 @@ class BaselineAE(Autoencoder):
         # put the two together
         self.model_obj = self.mllib.merge_models([self.encoder.model_obj, self.decoder.model_obj])
 
-    def check_build(self, input_dict, data_shape):
+    def check_build(self, input_dict, params, data_shape):
         """Check that autoencoder built ''correctly''"""
 
-        super().check_build(input_dict, data_shape)
+        super().check_build(input_dict, params, data_shape)
 
         # nothing else to check besides encoder and decoder
 

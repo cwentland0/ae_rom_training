@@ -18,7 +18,8 @@ LAYER_PARAM_DICT = {
     "layer_type": [str, nan],
     "layer_input_idx": [int, -1],
     "activation": [str, nan],  # layer activation
-    "num_filters": [int, nan],
+    "recurrent_activation": [str, "sigmoid"],  # recurrent activation for recurrent layers
+    "num_filters": [int, nan],  # number of filters for convolutional layers
     "strides": [(int,), nan],  # stride length for convolutional layers
     "dilation": [int, 1],  # dilation size for convolutional layers
     "padding": [str, "same"],  # padding type for convolutional layers
@@ -31,10 +32,14 @@ LAYER_PARAM_DICT = {
     "bias_reg": [str, None],  # bias regularization type
     "bias_reg_val": [float, 0.0],  # bias regularization value
     "bias_init": [str, "zeros"],  # initial distribution of biases
-    "output_size": [int, nan],  # output size for dense layers
+    "recurrent_reg": [str, None],  # recurrent regularization type
+    "recurrent_reg_val": [float, 0.0],  # recurrent regularization value
+    "recurrent_init": [str, "orthogonal"],  # initial distribution of recurrent kernel
+    "output_size": [int, nan],  # output size for dense, continuous Koopman, and recurrent layers
     "target_shape": [(int,), nan],  # target shape for reshape layers
     "use_bias": [bool, True],  # whether to apply bias to a layer's calculations
     "stable": [bool, True],  # whether to use stable formulation for continuous Koopman
+    "return_sequences": [bool, nan],  # whether to return full output sequence of recurrent layer
 }
 
 # training parameters
@@ -48,8 +53,7 @@ TRAIN_PARAM_DICT = {
     "batch_size": [int, nan],  # batch size
     "seq_length": [int, nan],  # length of time series sequence for evaluating time-steppers
     "seq_step": [int, 1],  # step size for sliding window for Hankelizing data
+    "seq_lookback": [int, 1],  # lookback window for recurrent time steppers
     "normalize": [bool, False],  # whether to normalize the error contributions in combine AE + TS loss
-    "alpha": [float, 0.5],  # weighting factor for autoencoder reconstruction error in combined loss
-    "beta": [float, 0.5],  # weighting factor for time-stepper error in combined loss
     "eps": [float, 1e-12],  # additive factor to prevent denominator from becoming zero
 }

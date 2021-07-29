@@ -13,6 +13,7 @@ from ae_rom_training.ml_library import get_ml_library
 from ae_rom_training.ae_rom.baseline_ae_rom import BaselineAEROM
 from ae_rom_training.ae_rom.koopman_ae_otto2019 import KoopmanAEOtto2019
 from ae_rom_training.ae_rom.koopman_ae_pan2020 import KoopmanAEPan2020
+from ae_rom_training.ae_rom.generic_recurrent_ae_ts import GenericRecurrentAETS
 
 np.random.seed(RANDOM_SEED)  # seed NumPy RNG
 
@@ -48,6 +49,7 @@ def main():
 
     # initialize all autoencoders
     # TODO: move this junk somewhere else
+    # TODO: just instantiate once then do a deep copy, overwrite network suffix
     aerom_list = []
     aerom_type = input_dict["aerom_type"]
     for net_idx in range(input_dict["num_networks"]):
@@ -58,6 +60,8 @@ def main():
             aerom_list.append(KoopmanAEOtto2019(input_dict, mllib, network_suffix))
         elif aerom_type == "koopman_pan2020":
             aerom_list.append(KoopmanAEPan2020(input_dict, mllib, network_suffix))
+        elif aerom_type == "generic_recurrent":
+            aerom_list.append(GenericRecurrentAETS(input_dict, mllib, network_suffix))
         else:
             raise ValueError("Invalid aerom_type selection: " + str(aerom_type))
 

@@ -6,7 +6,6 @@ from numpy import nan
 from hyperopt import STATUS_OK
 
 from ae_rom_training.constants import LAYER_PARAM_DICT, TRAIN_PARAM_DICT
-from ae_rom_training.preproc_utils import catch_input
 from ae_rom_training.hyperopt_utils import hp_expression
 
 
@@ -146,6 +145,7 @@ class AEROM:
                 # if not provided by user, try to assign default
                 else:
                     default = param_list[1]
+
                     # ignore parameters without defaults if their necessitating layers aren't in the network
                     if ("dense" not in layer_types) and (param_name in ["output_size"]):
                         continue
@@ -160,12 +160,19 @@ class AEROM:
                     elif ("reshape" not in layer_types) and (param_name in ["target_shape"]):
                         continue
 
+                    elif ("lstm" not in layer_types) and (param_name in ["return_sequences"]):
+                        continue
+
+                    elif ("koopman_continuous" not in layer_types) and (param_name in ["output_size"]):
+                        continue
+
                     # no default exists and is required
                     elif default is nan:
                         raise ValueError(
                             "Input "
                             + input_key
-                            + " has no default and must be provided. If your model doesn't need it, just provide a dummy value for now."
+                            + " has no default and must be provided. "
+                            + "If your model doesn't need it, just provide a dummy value for now."
                         )
 
                     # a default exists
@@ -269,7 +276,13 @@ class AEROM:
         assert ae or ts, "Must train autoencoder, time-stepper, or both."
 
         if input_dict["use_hyperopt"]:
-            print("\nHYPEROPT TRIAL NUMBER " + str(input_dict["trial_number"]) + "/" + str(input_dict["hyperopt_max_evals"]) + "\n")
+            print(
+                "\nHYPEROPT TRIAL NUMBER "
+                + str(input_dict["trial_number"])
+                + "/"
+                + str(input_dict["hyperopt_max_evals"])
+                + "\n"
+            )
             input_dict["trial_number"] += 1
 
         # build autoencoder
@@ -277,12 +290,12 @@ class AEROM:
             assert self.autoencoder is not None, "Autoencoder not initialized for this model"
             data_shape = data_list_train[0].shape[1:]
             self.autoencoder.build(input_dict, params, data_shape, batch_size=None)
-            self.autoencoder.check_build(input_dict, data_shape)
+            self.autoencoder.check_build(input_dict, params, data_shape)
 
         if ts:
             assert self.time_stepper is not None, "Time stepper not initialized for this model"
             self.time_stepper.build(input_dict, params, batch_size=None)
-            self.time_stepper.check_build(input_dict)
+            self.time_stepper.check_build(input_dict, params)
 
         self.build()  # finish building
 
@@ -319,7 +332,7 @@ class AEROM:
 
     def train(self, input_dict, params, data_list_train, data_list_val, param_prefix=""):
         """Train the network.
-        
+
         If the entire model, along with its training scheme, can be lumped into a single model,
         then train_model_builtin should be used.
         If the model requires customized training or can't be evaluated as a single model object,

@@ -3,7 +3,7 @@ from ae_rom_training.ml_model.ml_model import MLModel
 
 class KoopmanDiscrete(MLModel):
     """Linear Koopman operator.
-    
+
     Extremely simple, just a single linear dense layer with zero bias, no regularization.
     """
 
@@ -26,7 +26,7 @@ class KoopmanDiscrete(MLModel):
 
     def get_koopman(self):
         """Retrieve linear operator from model object.
-        
+
         Transpose is returned because Dense layer calculation is computed as
         output = input @ kernel + bias, while we (for aesthetic purposes only)
         want a Koopman operator of the form x^(n+1) = K @ x^(n).

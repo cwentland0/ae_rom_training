@@ -3,8 +3,8 @@ from ae_rom_training.ml_model.ml_model import MLModel
 
 class KoopmanContinuous(MLModel):
     """Continuous Koopman operator model.
-    
-    Computes advance from initial state via x(t_0) exp(t_{n+1} * K). 
+
+    Computes advance from initial state via x(t_0) exp(t_{n+1} * K).
     """
 
     def __init__(self, param_prefix, input_dict, mllib):

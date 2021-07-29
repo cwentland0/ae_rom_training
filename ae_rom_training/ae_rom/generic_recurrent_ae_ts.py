@@ -2,30 +2,17 @@ import os
 
 import numpy as np
 
-from ae_rom_training.preproc_utils import hankelize, calc_time_values
+from ae_rom_training.preproc_utils import hankelize
 from ae_rom_training.ae_rom.ae_rom import AEROM
 from ae_rom_training.autoencoder.autoencoder import Autoencoder
-from ae_rom_training.time_stepper.koopman import Koopman
+from ae_rom_training.time_stepper.generic_recurrent import GenericRecurrent
 
 
-class KoopmanAEPan2020(AEROM):
-    """Autoencoder which learns discrete Koopman, via Otto and Rowley (2019)"""
-
+class GenericRecurrentAETS(AEROM):
     def __init__(self, input_dict, mllib, network_suffix):
 
         self.autoencoder = Autoencoder(mllib)
-        self.time_stepper = Koopman(input_dict, mllib, continuous=True)
-
-        # check that time inputs are present
-        assert (
-            input_dict["time_init_list_train"][0] is not None
-        ), "Must provide time_init_list_train for continuous Koopman"
-        assert input_dict["dt_list_train"][0] is not None, "Must provide dt_list_train for continuous Koopman"
-        if input_dict["data_files_val"][0] is not None:
-            assert (
-                input_dict["time_init_list_val"][0] is not None
-            ), "Must provide time_init_list_val for continuous Koopman"
-            assert input_dict["dt_list_val"][0] is not None, "Must provide dt_list_val for continuous Koopman"
+        self.time_stepper = GenericRecurrent(mllib)
 
         super().__init__(input_dict, mllib, network_suffix)
 
@@ -35,6 +22,7 @@ class KoopmanAEPan2020(AEROM):
     def build(self):
         """Assemble singular model object for entire network, if possible"""
 
+        # can't assemble, since recurrent needs input series
         # TODO: need to figure out how to handle separate training while retaining this class object
         #   In the case of separate training, would want to compile the autoencoder
         #   In the event of separate training, could set autoencoder to BaselineAE?
@@ -64,51 +52,21 @@ class KoopmanAEPan2020(AEROM):
         # get solution time series windows
         seq_length = params["seq_length"]
         seq_step = params["seq_step"]
+        seq_lookback = params["seq_lookback"]
+        assert seq_lookback < seq_length, (
+            "seq_lookback ("
+            + str(seq_lookback)
+            + ") must not be greater than or equal to seq_length ("
+            + str(seq_length)
+        )
         data_list_train_seqs = hankelize(data_list_train, seq_length, seq_step=seq_step)
         data_list_val_seqs = hankelize(data_list_val, seq_length, seq_step=seq_step)
 
-        # get time value windows
-        # TODO: account for separate validation sets
-        time_values_list_train = []
-        time_values_list_val = []
-        # if split came directly from training sets
-        if input_dict["data_files_val"][0] is None:
-            for set_idx in range(len(data_list_train)):
-                time_values, _ = calc_time_values(
-                    input_dict["time_init_list_train"][set_idx],
-                    input_dict["dt_list_train"][set_idx],
-                    input_dict["idx_start_list_train"][set_idx],
-                    input_dict["idx_end_list_train"][set_idx],
-                    input_dict["idx_skip_list_train"][set_idx],
-                )
-                time_values_list_train.append(time_values[input_dict["split_idxs_train"][set_idx]])
-                time_values_list_val.append(time_values[input_dict["split_idxs_val"][set_idx]])
-        else:
-            raise ValueError("Time value calcs for separate val sets not implemented")
-
-        time_values_list_train_seqs = hankelize(time_values_list_train, seq_length, seq_step=seq_step)
-        time_values_list_val_seqs = hankelize(time_values_list_val, seq_length, seq_step=seq_step)
-
-        # concatenate sequences
+        # concatenate; shuffle training sequences
         data_train_seqs = np.concatenate(data_list_train_seqs, axis=0)
         data_val_seqs = np.concatenate(data_list_val_seqs, axis=0)
-        time_values_train_seqs = np.concatenate(time_values_list_train_seqs, axis=0)
-        time_values_val_seqs = np.concatenate(time_values_list_val_seqs, axis=0)
-
-        # compute time ELAPSED over sequences
-        time_values_train_seqs -= time_values_train_seqs[:, [0], :]
-        time_values_val_seqs -= time_values_val_seqs[:, [0], :]
-
-        # non-dimensionalize time, to avoid truncation error
-        # TODO: automatic way of doing this?
-        dt_nondim = input_dict["dt_nondim"]
-        time_values_train_seqs /= dt_nondim
-        time_values_val_seqs /= dt_nondim
-
-        # shuffle training sequences
         shuffle_idxs = np.random.permutation(np.arange(data_train_seqs.shape[0]))
         data_train_seqs = data_train_seqs[shuffle_idxs, ...]
-        time_values_train_seqs = time_values_train_seqs[shuffle_idxs, ...]
 
         # get source list
         self.grad_source_list = [
@@ -128,9 +86,7 @@ class KoopmanAEPan2020(AEROM):
             options,
             params,
             param_prefix,
-            continuous=True,
-            time_values_train=time_values_train_seqs,
-            time_values_val=time_values_val_seqs,
+            lookback=seq_lookback,
         )
 
         self.loss_train_recon = loss_addtl_train_list[0]

@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from hyperopt import tpe, rand
 
-from ae_rom_training.constants import RANDOM_SEED, FLOAT_TYPE
+from ae_rom_training.constants import RANDOM_SEED
 
 
 def parse_value(expr):
@@ -434,7 +434,7 @@ def calc_time_values(time_start, dt, idx_start, idx_end, idx_skip, shuffle_idxs=
 
 def center_switch(data: list, cent_type):
     """Computes centering profile(s) for data
-    
+
     data is a list of data arrays
 
     If cent_type == "init_cond", the output is a list of centering profiles for each data set
@@ -464,7 +464,7 @@ def center_switch(data: list, cent_type):
 
 def center_data_set(data: list, cent_type, model_dir, network_suffix, cent_prof=None, save_cent=False):
     """Center data set about some profile.
-    
+
     data is a list of data arrays assumed to be in NCHW format.
     """
 
@@ -494,7 +494,7 @@ def center_data_set(data: list, cent_type, model_dir, network_suffix, cent_prof=
 
 def split_data_set(data, split_type, val_perc):
     """Split dataset into training and validation sets.
-    
+
     data is a NumPy array here.
     Also returns indices mapping original dataset snapshot indices to split indices.
     """
@@ -520,7 +520,7 @@ def split_data_set(data, split_type, val_perc):
 
 def hankelize(data: list, seq_length, seq_step=1):
     """Arrange data snapshots into contiguous windows
-    
+
     data is assumed to be a list of NumPy arrays.
     Returns a list of Hankelized matrices.
     """
@@ -552,7 +552,7 @@ def hankelize(data: list, seq_length, seq_step=1):
 
 def norm_switch(data: list, norm_type, axes):
     """Compute normalization profile
-    
+
     Here, data is a single array concatenated along the time axis.
     """
 
@@ -588,7 +588,7 @@ def norm_switch(data: list, norm_type, axes):
 # assumed to be in NCHW format
 def normalize_data_set(data: list, norm_type, model_dir, network_suffix, norms=None, save_norm=False):
     """Normalize data
-    
+
     data is a list of data arrays assumed to be in NCHW format
     """
 

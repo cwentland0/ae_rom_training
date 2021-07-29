@@ -52,9 +52,9 @@ class Koopman(TimeStepper):
 
         self.model_obj = self.stepper.model_obj
 
-    def check_build(self, input_dict):
+    def check_build(self, input_dict, params):
         """Check that Koopman built ''correctly''
-        
+
         All this can really do is check that the I/O shapes are as expected.
         """
 

@@ -6,7 +6,7 @@ from ae_rom_training.ml_model.decoder import Decoder
 
 class Autoencoder:
     """Base class for autoencoders.
-    
+
     All autoencoders have an outer "encoder" and a "decoder".
     Child classes implement additional component networks and features.
     """
@@ -20,7 +20,7 @@ class Autoencoder:
 
     def build(self, input_dict, params, data_shape, batch_size=None):
         """Builds required outer encoder and decoder.
-        
+
         Child class implementations should build any additional component networks.
         """
 
@@ -34,9 +34,9 @@ class Autoencoder:
         self.decoder.assemble(input_dict, params, input_dict["latent_dim"])
         self.mllib.display_model_summary(self.decoder.model_obj, displaystr="DECODER")
 
-    def check_build(self, input_dict, data_shape):
+    def check_build(self, input_dict, params, data_shape):
         """Check that outer encoder and decoder built ''correctly''
-        
+
         Child class implementations should check any additional component networks.
         """
 
@@ -70,7 +70,7 @@ class Autoencoder:
 
     def save(self, model_dir, network_suffix):
         """Save encoder and decoder models.
-        
+
         Child class implementations should save any additional component network models.
         """
 

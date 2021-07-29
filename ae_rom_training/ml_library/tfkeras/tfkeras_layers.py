@@ -1,6 +1,5 @@
 import tensorflow as tf
 from tensorflow.keras.layers import Layer
-from ae_rom_training.constants import RANDOM_SEED
 
 
 class ContinuousKoopman(Layer):
@@ -59,7 +58,7 @@ class ContinuousKoopman(Layer):
 
     def call(self, inputs):
         """Computes continuous Koopman operation, inputs @ exp(Dt * K)
-        
+
         inputs: tensor of shape (output_size,) representing initial latent variable value
         Dt: scalar, time step of desired output latent variable prediction
         """
