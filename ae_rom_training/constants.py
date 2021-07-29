@@ -22,7 +22,9 @@ LAYER_PARAM_DICT = {
     "num_filters": [int, nan],  # number of filters for convolutional layers
     "strides": [(int,), nan],  # stride length for convolutional layers
     "dilation": [int, 1],  # dilation size for convolutional layers
+    "dilation_tcn": [(int,), nan],  # dilation tuple for TCN, required
     "padding": [str, "same"],  # padding type for convolutional layers
+    "padding_tcn": [str, "causal"],  # padding for TCN layers
     "kern_size": [int, nan],  # uniform kernel size
     "kern_reg": [str, None],  # weight regularization type
     "kern_reg_val": [float, 0.0],  # weight regularization value

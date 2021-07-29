@@ -32,6 +32,13 @@ class AEROM:
 
         self.preproc_inputs(input_dict)
 
+    def check_param_vs_layers(self, param, param_list_clear, layer_list_full, layer_list_clear):
+
+        if (param in param_list_clear) and (not any(layer in layer_list_full for layer in layer_list_clear)):
+            return True
+        else:
+            return False
+
     def preproc_inputs(self, input_dict):
         """Set up parameter space for layer and training inputs.
 
@@ -147,23 +154,16 @@ class AEROM:
                     default = param_list[1]
 
                     # ignore parameters without defaults if their necessitating layers aren't in the network
-                    if ("dense" not in layer_types) and (param_name in ["output_size"]):
-                        continue
-
-                    elif (
-                        ("conv" not in layer_types)
-                        and ("trans_conv" not in layer_types)
-                        and (param_name in ["num_filters", "kern_size", "dilation", "strides"])
+                    if (
+                        self.check_param_vs_layers(
+                            param_name, ["output_size"], layer_types, ["dense", "koopman_continous"]
+                        ) or self.check_param_vs_layers(
+                            param_name, ["num_filters", "kern_size", "dilation", "strides"], layer_types, ["conv", "trans_conv"]
+                        ) or self.check_param_vs_layers(param_name, [], layer_types, ["conv", "trans_conv"])
+                        or self.check_param_vs_layers(param_name, ["target_shape"], layer_types, ["reshape"])
+                        or self.check_param_vs_layers(param_name, ["return_sequences"], layer_types, ["lstm", "tcn"])
+                        or self.check_param_vs_layers(param_name, ["dilation_tcn"], layer_types, ["tcn"])
                     ):
-                        continue
-
-                    elif ("reshape" not in layer_types) and (param_name in ["target_shape"]):
-                        continue
-
-                    elif ("lstm" not in layer_types) and (param_name in ["return_sequences"]):
-                        continue
-
-                    elif ("koopman_continuous" not in layer_types) and (param_name in ["output_size"]):
                         continue
 
                     # no default exists and is required

@@ -13,6 +13,7 @@ from tensorflow.keras.regularizers import l1, l2
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.utils import Progbar
+from tcn import TCN
 
 from ae_rom_training.constants import RANDOM_SEED, TRAIN_VERBOSITY
 from ae_rom_training.ml_library.ml_library import MLLibrary
@@ -74,7 +75,7 @@ class TFKerasLibrary(MLLibrary):
         strides,
         dilation,
         network_order,
-        activation="None",
+        activation,
         padding="same",
         kern_reg=None,
         kern_reg_val=0.0,
@@ -165,7 +166,7 @@ class TFKerasLibrary(MLLibrary):
         strides,
         dilation,
         network_order,
-        activation="None",
+        activation,
         padding="same",
         kern_reg=None,
         kern_reg_val=0.0,
@@ -251,7 +252,7 @@ class TFKerasLibrary(MLLibrary):
         self,
         layer_input,
         output_size,
-        activation=None,
+        activation,
         use_bias=True,
         kern_reg=None,
         kern_reg_val=0.0,
@@ -314,7 +315,7 @@ class TFKerasLibrary(MLLibrary):
         layer_input,
         output_size,
         return_sequences,
-        activation="tanh",
+        activation,
         recurrent_activation="sigmoid",
         use_bias=True,
         kern_reg=None,
@@ -352,6 +353,32 @@ class TFKerasLibrary(MLLibrary):
             kernel_regularizer=kern_reg,
             recurrent_regularizer=recurrent_reg,
             return_sequences=return_sequences,
+            name=name,
+        )(layer_input)
+
+        return layer_output
+
+    def get_tcn_layer(
+        self,
+        layer_input,
+        num_filters,
+        kern_size,
+        activation,
+        dilations,
+        return_sequences,
+        padding="causal",
+        kern_init="glorot_uniform",
+        name=None,
+    ):
+
+        layer_output = TCN(
+            nb_filters=num_filters,
+            kernel_size=kern_size,
+            dilations=dilations,
+            padding=padding,
+            return_sequences=return_sequences,
+            activation=activation,
+            kernel_initializer=kern_init,
             name=name,
         )(layer_input)
 

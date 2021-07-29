@@ -109,7 +109,7 @@ class MLModel:
         conv_count, trans_conv_count = 0, 0
         dense_count = 0
         koopman_continuous_count = 0
-        lstm_count = 0
+        lstm_count, tcn_count = 0, 0
         reshape_count, flatten_count = 0, 0
         self.num_addtl_layers = 0
         addtl_layer_idxs = []
@@ -137,7 +137,7 @@ class MLModel:
                     layer_dict["strides"],
                     layer_dict["dilation"],
                     input_dict["network_order"],
-                    activation=layer_dict["activation"],
+                    layer_dict["activation"],
                     padding=layer_dict["padding"],
                     kern_reg=layer_dict["kern_reg"],
                     kern_reg_val=layer_dict["kern_reg_val"],
@@ -165,7 +165,7 @@ class MLModel:
                     layer_dict["strides"],
                     layer_dict["dilation"],
                     input_dict["network_order"],
-                    activation=layer_dict["activation"],
+                    layer_dict["activation"],
                     padding=layer_dict["padding"],
                     kern_reg=layer_dict["kern_reg"],
                     kern_reg_val=layer_dict["kern_reg_val"],
@@ -184,7 +184,7 @@ class MLModel:
                 layer_output, added_flatten = self.mllib.get_dense_layer(
                     layer_input,
                     layer_dict["output_size"],
-                    activation=layer_dict["activation"],
+                    layer_dict["activation"],
                     use_bias=layer_dict["use_bias"],
                     kern_reg=layer_dict["kern_reg"],
                     kern_reg_val=layer_dict["kern_reg_val"],
@@ -225,7 +225,7 @@ class MLModel:
                     layer_input,
                     layer_dict["output_size"],
                     layer_dict["return_sequences"],
-                    activation=layer_dict["activation"],
+                    layer_dict["activation"],
                     recurrent_activation=layer_dict["recurrent_activation"],
                     use_bias=layer_dict["use_bias"],
                     kern_reg=layer_dict["kern_reg"],
@@ -242,6 +242,20 @@ class MLModel:
                     name="lstm_" + str(lstm_count),
                 )
                 lstm_count += 1
+
+            elif layer_type == "tcn":
+                layer_output = self.mllib.get_tcn_layer(
+                    layer_input,
+                    layer_dict["num_filters"],
+                    layer_dict["kern_size"],
+                    layer_dict["activation"],
+                    layer_dict["dilation_tcn"],
+                    layer_dict["return_sequences"],
+                    padding=layer_dict["padding_tcn"],
+                    kern_init=layer_dict["kern_init"],
+                    name="tcn_" + str(tcn_count),
+                )
+                tcn_count += 1
 
             # reshape layer
             elif layer_type == "reshape":
