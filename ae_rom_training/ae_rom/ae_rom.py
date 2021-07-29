@@ -268,6 +268,10 @@ class AEROM:
 
         assert ae or ts, "Must train autoencoder, time-stepper, or both."
 
+        if input_dict["use_hyperopt"]:
+            print("\nHYPEROPT TRIAL NUMBER " + str(input_dict["trial_number"]) + "/" + str(input_dict["hyperopt_max_evals"]) + "\n")
+            input_dict["trial_number"] += 1
+
         # build autoencoder
         if ae:
             assert self.autoencoder is not None, "Autoencoder not initialized for this model"
@@ -298,9 +302,9 @@ class AEROM:
         time_start = time()
         loss_train, loss_val = self.train(input_dict, params, data_list_train, data_list_val, param_prefix=param_prefix)
         train_time = time() - time_start
-        print("===========================================")
+        print("=================================================================")
         print("Training complete in " + str(train_time) + " seconds")
-        print("===========================================")
+        print("=================================================================")
 
         # check if this model is the best so far, if so save
         self.check_best(input_dict, loss_val, params)

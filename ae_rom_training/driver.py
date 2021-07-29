@@ -2,6 +2,7 @@ import os
 from functools import partial
 import argparse
 import pickle
+from time import time
 
 import numpy as np
 from hyperopt import fmin, Trials, space_eval
@@ -61,7 +62,13 @@ def main():
             raise ValueError("Invalid aerom_type selection: " + str(aerom_type))
 
     # optimize each model
+    time_start_full = time()
     for net_idx in range(input_dict["num_networks"]):
+
+        print("=================================================================")
+        print("TRAINING NETWORK " + str(net_idx + 1) + "/" + str(input_dict["num_networks"]))
+        print("=================================================================")
+        time_start_network = time()
 
         net_suff = input_dict["network_suffixes"][net_idx]
         data_list_train_net = data_list_train[net_idx]
@@ -71,9 +78,11 @@ def main():
 
         aerom = aerom_list[net_idx]
 
+        input_dict["trial_number"] = 1
+
         if input_dict["use_hyperopt"]:
 
-            print("Performing hyper-parameter optimization!")
+            print("\nPERFORMING HYPER-PARAMETER OPTIMIZATION\n")
 
             # wrap objective function to pass additional arguments
             if (aerom.time_stepper is None) or (
@@ -122,7 +131,7 @@ def main():
             f.close()
 
         else:
-            print("Optimizing single architecture...")
+            print("\nTRAINING SINGLE ARCHITECTURE\n")
 
             # train autoencoder alone
             if (aerom.time_stepper is None) or (
@@ -143,10 +152,20 @@ def main():
 
             best_space = aerom.param_space
 
+        time_end_network = time()
+        print("=================================================================")
+        print("NETWORK TRAINING COMPLETE IN " + str(time_end_network - time_start_network) + " seconds")
+        print("=================================================================")
+
         # write parameters to file
         f = open(os.path.join(input_dict["model_dir"], "best_params" + net_suff + ".pickle"), "wb")
         pickle.dump(best_space, f)
         f.close()
+
+    time_end_full = time()
+    print("=================================================================")
+    print("TOTAL TRAINING COMPLETE IN " + str(time_end_full - time_start_full) + " seconds")
+    print("=================================================================")
 
 
 if __name__ == "__main__":
