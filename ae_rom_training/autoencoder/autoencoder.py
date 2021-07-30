@@ -18,20 +18,24 @@ class Autoencoder:
         self.decoder = Decoder("decoder", mllib)
         self.component_networks = [self.encoder, self.decoder]
 
-    def build(self, input_dict, params, data_shape, batch_size=None):
+    def build(self, input_dict, params, data_shape, ae, ts, network_suffix, batch_size=None):
         """Builds required outer encoder and decoder.
 
         Child class implementations should build any additional component networks.
         """
 
-        # assemble encoder
-        self.encoder.assemble(input_dict, params, data_shape, batch_size=batch_size)
-        self.mllib.display_model_summary(self.encoder.model_obj, displaystr="ENCODER")
+        # assemble autoencoder from scratch if training it
+        if ae:
+            self.encoder.assemble(input_dict, params, data_shape, batch_size=batch_size)
+            if input_dict["mirrored_decoder"]:
+                self.decoder.mirror_encoder(self.encoder, input_dict)
+            self.decoder.assemble(input_dict, params, input_dict["latent_dim"])
+        else:
+            self.encoder.model_obj = self.mllib.load_model(input_dict["model_dir"], "encoder" + network_suffix)
+            self.decoder.model_obj = self.mllib.load_model(input_dict["model_dir"], "decoder" + network_suffix)
 
-        # assemble decoder (mirror, if requested)
-        if input_dict["mirrored_decoder"]:
-            self.decoder.mirror_encoder(self.encoder, input_dict)
-        self.decoder.assemble(input_dict, params, input_dict["latent_dim"])
+        # display summaries
+        self.mllib.display_model_summary(self.encoder.model_obj, displaystr="ENCODER")
         self.mllib.display_model_summary(self.decoder.model_obj, displaystr="DECODER")
 
     def check_build(self, input_dict, params, data_shape):

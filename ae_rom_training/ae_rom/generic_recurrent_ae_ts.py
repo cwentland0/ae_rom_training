@@ -5,47 +5,98 @@ import numpy as np
 from ae_rom_training.preproc_utils import hankelize
 from ae_rom_training.ae_rom.ae_rom import AEROM
 from ae_rom_training.autoencoder.autoencoder import Autoencoder
+from ae_rom_training.autoencoder.baseline_ae import BaselineAE
 from ae_rom_training.time_stepper.generic_recurrent import GenericRecurrent
 
 
 class GenericRecurrentAETS(AEROM):
     def __init__(self, input_dict, mllib, network_suffix):
 
-        self.autoencoder = Autoencoder(mllib)
-        self.time_stepper = GenericRecurrent(mllib)
+        if input_dict["train_ts"]:
+            self.autoencoder = Autoencoder(mllib)
+            self.time_stepper = GenericRecurrent(mllib)
+        else:
+            self.autoencoder = BaselineAE(mllib)
+            self.time_stepper = None
 
         super().__init__(input_dict, mllib, network_suffix)
-
-        # TODO: handle separate training, blech
-        self.train_builtin = False
 
     def build(self):
         """Assemble singular model object for entire network, if possible"""
 
-        # can't assemble, since recurrent needs input series
-        # TODO: need to figure out how to handle separate training while retaining this class object
-        #   In the case of separate training, would want to compile the autoencoder
-        #   In the event of separate training, could set autoencoder to BaselineAE?
-        pass
+        if self.training_ae:
+            if self.training_ts:
+                # will have to run custom training
+                return
+            else:
+                # will run builtin training on autoencoder
+                self.model_obj = self.autoencoder.model_obj
+        else:
+            # will run builtin training on time-stepper
+            self.model_obj = self.time_stepper.model_obj
+
 
     def save(self, model_dir):
-        """Save individual networks in AE ROM"""
-
-        # TODO: again, should be able to handle selective saving for separate training
+        """Save individual networks and losses in AE ROM"""
+        
+        # save models
         self.autoencoder.save(model_dir, self.network_suffix)
-        self.time_stepper.save(model_dir, self.network_suffix)
+        if self.training_ts:
+            self.time_stepper.save(model_dir, self.network_suffix)
 
-        loss_train_recon_path = os.path.join(model_dir, "loss_train_recon" + self.network_suffix + ".npy")
-        loss_train_step_path = os.path.join(model_dir, "loss_train_step" + self.network_suffix + ".npy")
-        loss_val_recon_path = os.path.join(model_dir, "loss_val_recon" + self.network_suffix + ".npy")
-        loss_val_step_path = os.path.join(model_dir, "loss_val_step" + self.network_suffix + ".npy")
-        np.save(loss_train_recon_path, self.loss_train_recon)
-        np.save(loss_train_step_path, self.loss_train_step)
-        np.save(loss_val_recon_path, self.loss_val_recon)
-        np.save(loss_val_step_path, self.loss_val_step)
+        # save reconstruction and prediction losses
+        if self.training_ae and self.training_ts:
+            loss_train_recon_path = os.path.join(model_dir, "loss_train_recon" + self.network_suffix + ".npy")
+            loss_train_step_path = os.path.join(model_dir, "loss_train_step" + self.network_suffix + ".npy")
+            loss_val_recon_path = os.path.join(model_dir, "loss_val_recon" + self.network_suffix + ".npy")
+            loss_val_step_path = os.path.join(model_dir, "loss_val_step" + self.network_suffix + ".npy")
+            np.save(loss_train_recon_path, self.loss_train_recon)
+            np.save(loss_train_step_path, self.loss_train_step)
+            np.save(loss_val_recon_path, self.loss_val_recon)
+            np.save(loss_val_step_path, self.loss_val_step)
+
+        # save builtin training and validation losses
+        else:
+
+            loss_train_hist_path = os.path.join(model_dir, self.train_prefix + "loss_train_hist_" + self.network_suffix + ".npy")
+            loss_val_hist_path = os.path.join(model_dir, self.train_prefix + "loss_val_hist_" + self.network_suffix + ".npy")
+            np.save(loss_train_hist_path, self.loss_train_hist)
+            np.save(loss_val_hist_path, self.loss_val_hist)
+
+
+    def train_model_builtin(
+        self, data_list_train, data_list_val, optimizer, loss, options, input_dict, params,
+    ):
+
+        if self.training_ts:
+
+            raise ValueError
+
+        else:
+
+            # concatenate and shuffle data sets, since order doesn't matter
+            data_train = np.concatenate(data_list_train, axis=0)
+            data_val = np.concatenate(data_list_val, axis=0)
+            np.random.shuffle(data_train)
+
+        # train
+        self.loss_train_hist, self.loss_val_hist, loss_train, loss_val = self.mllib.train_model_builtin(
+            self.model_obj,
+            data_train,
+            data_train,
+            data_val,
+            data_val,
+            optimizer,
+            loss,
+            options,
+            input_dict,
+            params,
+        )
+
+        return loss_train, loss_val
 
     def train_model_custom(
-        self, data_list_train, data_list_val, optimizer, loss, options, input_dict, params, param_prefix,
+        self, data_list_train, data_list_val, optimizer, loss, options, input_dict, params,
     ):
         """Call custom training loop after organizing data"""
 
@@ -85,7 +136,6 @@ class GenericRecurrentAETS(AEROM):
             loss,
             options,
             params,
-            param_prefix,
             lookback=seq_lookback,
         )
 

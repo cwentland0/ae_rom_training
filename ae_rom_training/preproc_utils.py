@@ -79,7 +79,7 @@ def read_input_file(input_file):
     Variable training parameters are checked right before training.
     """
 
-    # TODO: lots more error catching
+    # TODO: this is an insanely dumb way of catching required parameters, any better way?
 
     # raw inputs, no defaults assigned
     input_dict_raw = read_text_file(input_file)
@@ -141,13 +141,27 @@ def read_input_file(input_file):
         if len(input_dict["dt_list_val"]) == 1:
             input_dict["dt_list_val"] *= num_datasets_val
 
-    # global parameters
-    input_dict["aerom_type"] = input_dict_raw["aerom_type"]
+    # data preprocessing
     input_dict["split_scheme"] = input_dict_raw["split_scheme"]
     input_dict["centering_scheme"] = input_dict_raw["centering_scheme"]
     input_dict["normal_scheme"] = input_dict_raw["normal_scheme"]
     input_dict["val_perc"] = input_dict_raw["val_perc"]
-    input_dict["training_format"] = catch_input(input_dict_raw, "training_format", "separate")
+
+    # global parameters
+    input_dict["aerom_type"] = input_dict_raw["aerom_type"]
+    input_dict["latent_dim"] = input_dict_raw["latent_dim"]
+    input_dict["train_ae"] = catch_input(input_dict_raw, "train_ae", False)
+    input_dict["train_ts"] = catch_input(input_dict_raw, "train_ts", False)
+    input_dict["train_separate"] = catch_input(input_dict_raw, "train_separate", False)
+    assert input_dict["train_ae"] or input_dict["train_ts"], "Must set train_ae = True or train_ts = True"
+    if input_dict["train_ae"] != input_dict["train_ts"]:
+        input_dict["train_separate"] = True
+    if not input_dict["train_separate"]:
+        assert input_dict["train_ae"] and input_dict["train_ts"], (
+            "If train_separate = False, must have train_ae = True and train_ts = True"
+        )
+
+    # misc
     input_dict["precision"] = catch_input(
         input_dict_raw, "precision", "32"
     )  # string because "mixed" will be an option later
@@ -627,6 +641,11 @@ def normalize_data_set(data: list, norm_type, model_dir, network_suffix, norms=N
         np.save(os.path.join(model_dir, "norm_fac_prof" + network_suffix + ".npy"), norm_fac_out)
 
     return data, norm_sub, norm_fac
+
+def remove_prefix(text: str, prefix: str):
+    if text.startswith(prefix):
+        return text[len(prefix):]
+    return text
 
 
 def get_shape_tuple(shape_var):

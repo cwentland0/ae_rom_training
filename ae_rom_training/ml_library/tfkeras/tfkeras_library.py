@@ -13,6 +13,7 @@ from tensorflow.keras.regularizers import l1, l2
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.utils import Progbar
+from tensorflow.keras.models import load_model
 from tcn import TCN
 
 from ae_rom_training.constants import RANDOM_SEED, TRAIN_VERBOSITY
@@ -500,17 +501,17 @@ class TFKerasLibrary(MLLibrary):
 
         return type_list
 
-    def get_optimizer(self, params, param_prefix=""):
+    def get_optimizer(self, params):
 
-        optimizer_name = params[param_prefix + "optimizer"]
+        optimizer_name = params["optimizer"]
         if optimizer_name == "Adam":
-            return Adam(learning_rate=params[param_prefix + "learn_rate"])
+            return Adam(learning_rate=params["learn_rate"])
         else:
             raise ValueError("Invalid regularization name: " + str(optimizer_name))
 
-    def get_loss_function(self, params, param_prefix=""):
+    def get_loss_function(self, params):
 
-        loss_name = params[param_prefix + "loss_func"]
+        loss_name = params["loss_func"]
         if loss_name == "pure_l2":
             return pure_l2
         elif loss_name == "pure_mse":
@@ -520,14 +521,14 @@ class TFKerasLibrary(MLLibrary):
         else:
             return loss_name  # assumed to be a built-in loss string
 
-    def get_options(self, params, param_prefix=""):
+    def get_options(self, params):
 
         callback_list = []
         added_callback = False
 
         # early stopping
-        if params[param_prefix + "early_stopping"]:
-            es_patience = params[param_prefix + "es_patience"]
+        if params["early_stopping"]:
+            es_patience = params["es_patience"]
             early_stop = EarlyStopping(patience=int(es_patience), restore_best_weights=True)
             callback_list.append(early_stop)
             added_callback = True
@@ -552,13 +553,12 @@ class TFKerasLibrary(MLLibrary):
         options,
         input_dict,
         params,
-        param_prefix,
     ):
 
         model_obj.compile(optimizer=optimizer, loss=loss)
 
-        batch_size = params[param_prefix + "batch_size"]
-        max_epochs = params[param_prefix + "max_epochs"]
+        batch_size = params["batch_size"]
+        max_epochs = params["max_epochs"]
         history = model_obj.fit(
             x=data_input_train,
             y=data_output_train,
@@ -588,7 +588,6 @@ class TFKerasLibrary(MLLibrary):
         loss,
         options,
         params,
-        param_prefix,
         continuous=False,
         time_values_train=None,
         time_values_val=None,
@@ -597,8 +596,8 @@ class TFKerasLibrary(MLLibrary):
 
         # TODO: could roll time values into data_input_train, make it a dict?
 
-        batch_size = params[param_prefix + "batch_size"]
-        max_epochs = params[param_prefix + "max_epochs"]
+        batch_size = params["batch_size"]
+        max_epochs = params["max_epochs"]
         loss_train_hist = np.zeros(max_epochs)
         loss_val_hist = np.zeros(max_epochs)
         loss_addtl_train_list = []
@@ -697,6 +696,21 @@ class TFKerasLibrary(MLLibrary):
         """
 
         return model_obj.layers[-1].get_koopman_numpy()
+
+    def load_model(self, model_dir, model_name):
+
+        # TODO: add ability to load compilable model for resuming training
+        # TODO: load from SavedModel
+
+        # check if h5 exists
+        h5_path = os.path.join(model_dir, model_name + ".h5")
+        if os.path.isfile(h5_path):
+            model_obj = load_model(h5_path, compile=False)
+
+        else:
+            raise ValueError("Could not find h5 model at " + h5_path)
+
+        return model_obj
 
     def save_model(self, model_obj, save_path, save_h5=True):
         """Save Tensorflow model object.

@@ -13,13 +13,14 @@ class BaselineAE(Autoencoder):
 
         # no extra networks are added to component_networks
 
-    def build(self, input_dict, params, data_shape, batch_size=None):
+    def build(self, input_dict, params, data_shape, ae, ts, network_suffix, batch_size=None):
 
         # build encoder and decoder
-        super().build(input_dict, params, data_shape, batch_size=batch_size)
+        super().build(input_dict, params, data_shape, ae, ts, network_suffix, batch_size=batch_size)
 
-        # put the two together
-        self.model_obj = self.mllib.merge_models([self.encoder.model_obj, self.decoder.model_obj])
+        # put the two together if not training a time-stepper
+        if not ts:
+            self.model_obj = self.mllib.merge_models([self.encoder.model_obj, self.decoder.model_obj])
 
     def check_build(self, input_dict, params, data_shape):
         """Check that autoencoder built ''correctly''"""

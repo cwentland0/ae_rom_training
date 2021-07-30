@@ -45,7 +45,7 @@ class KoopmanAEOtto2019(AEROM):
         np.save(loss_val_step_path, self.loss_val_step)
 
     def train_model_custom(
-        self, data_list_train, data_list_val, optimizer, loss, options, params, input_dict, param_prefix,
+        self, data_list_train, data_list_val, optimizer, loss, options, params, input_dict,
     ):
         """Call custom training loop after organizing data"""
 
@@ -77,7 +77,6 @@ class KoopmanAEOtto2019(AEROM):
             loss,
             options,
             params,
-            param_prefix,
         )
 
         self.loss_train_recon = loss_addtl_train_list[0]

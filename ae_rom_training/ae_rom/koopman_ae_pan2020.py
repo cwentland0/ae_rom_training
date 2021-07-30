@@ -57,7 +57,7 @@ class KoopmanAEPan2020(AEROM):
         np.save(loss_val_step_path, self.loss_val_step)
 
     def train_model_custom(
-        self, data_list_train, data_list_val, optimizer, loss, options, input_dict, params, param_prefix,
+        self, data_list_train, data_list_val, optimizer, loss, options, input_dict, params,
     ):
         """Call custom training loop after organizing data"""
 
@@ -127,7 +127,6 @@ class KoopmanAEPan2020(AEROM):
             loss,
             options,
             params,
-            param_prefix,
             continuous=True,
             time_values_train=time_values_train_seqs,
             time_values_val=time_values_val_seqs,

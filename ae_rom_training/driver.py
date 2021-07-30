@@ -31,15 +31,17 @@ def main():
     input_file = os.path.expanduser(parser.parse_args().input_file)
     assert os.path.isfile(input_file), "Given input_file does not exist"
     input_dict = read_input_file(input_file)
+    model_dir = input_dict["model_dir"]
 
     # clear out old results
     # TODO: need to finalize whether this is a good thing, do I trust myself to not delete good results accidentally?
     for network_suffix in input_dict["network_suffixes"]:
-        loss_loc = os.path.join(input_dict["model_dir"], "val_loss" + network_suffix + ".dat")
-        try:
-            os.remove(loss_loc)
-        except FileNotFoundError:
-            pass
+        for train_prefix in ["", "ae_", "ts_"]:
+            loss_loc = os.path.join(model_dir, train_prefix + "val_loss" + network_suffix + ".dat")
+            try:
+                os.remove(loss_loc)
+            except FileNotFoundError:
+                pass
 
     # get ML library to use for this training session
     mllib = get_ml_library(input_dict)
@@ -89,28 +91,12 @@ def main():
             print("\nPERFORMING HYPER-PARAMETER OPTIMIZATION\n")
 
             # wrap objective function to pass additional arguments
-            if (aerom.time_stepper is None) or (
-                (aerom.time_stepper is not None) and (aerom.training_format == "separate")
-            ):
-                objective_func_wrapped = partial(
-                    aerom.build_and_train,
-                    input_dict=input_dict,
-                    data_list_train=data_list_train_net,
-                    data_list_val=data_list_val_net,
-                    ae=True,
-                )
-
-            elif (aerom.time_stepper is not None) and (aerom.training_format == "combined"):
-                objective_func_wrapped = partial(
-                    aerom.build_and_train,
-                    input_dict=input_dict,
-                    data_list_train=data_list_train_net,
-                    data_list_val=data_list_val_net,
-                    ae=True,
-                    ts=True,
-                )
-            else:
-                raise ValueError("Something unexpected happened in selecting build_and_train")
+            objective_func_wrapped = partial(
+                aerom.build_and_train,
+                input_dict=input_dict,
+                data_list_train=data_list_train_net,
+                data_list_val=data_list_val_net,
+            )
 
             # find "best" model according to specified hyperparameter optimization algorithm
             trials = Trials()
@@ -130,46 +116,62 @@ def main():
             best_space = space_eval(aerom.param_space, best)
             print("Best parameters:")
             print(best_space)
-            f = open(os.path.join(input_dict["model_dir"], "hyper_opt_trials" + net_suff + ".pickle"), "wb")
+            f = open(os.path.join(model_dir, "hyper_opt_trials" + net_suff + ".pickle"), "wb")
             pickle.dump(trials, f)
             f.close()
 
         else:
+
             print("\nTRAINING SINGLE ARCHITECTURE\n")
 
-            # train autoencoder alone
-            if (aerom.time_stepper is None) or (
-                (aerom.time_stepper is not None) and (aerom.training_format == "separate")
-            ):
-                best = aerom.build_and_train(
-                    aerom.param_space, input_dict, data_list_train_net, data_list_val_net, ae=True
-                )
+            # train networks separately
+            if input_dict["train_separate"]:
+                if input_dict["train_ae"]:
+                    best = aerom.build_and_train(
+                        aerom.param_space, input_dict, data_list_train_net, data_list_val_net, training_ae=True,
+                    )
+                    write_param_space(aerom.param_space, model_dir, aerom.train_prefix, "best_params", net_suff)
 
-            # train autoencoder and time stepper together
-            elif (aerom.time_stepper is not None) and (aerom.training_format == "combined"):
-                best = aerom.build_and_train(
-                    aerom.param_space, input_dict, data_list_train_net, data_list_val_net, ae=True, ts=True
-                )
+                if input_dict["train_ts"]:
+                    best = aerom.build_and_train(
+                        aerom.param_space, input_dict, data_list_train_net, data_list_val_net, training_ts=True
+                    )
+                    write_param_space(aerom.param_space, model_dir, aerom.train_prefix, "best_params", net_suff)
 
+            # train networks together
             else:
-                raise ValueError("Something unexpected happened in selecting build_and_train")
-
-            best_space = aerom.param_space
+                best = aerom.build_and_train(
+                    aerom.param_space,
+                    input_dict,
+                    data_list_train_net,
+                    data_list_val_net,
+                    training_ae=True,
+                    training_ts=True
+                )
+                write_param_space(
+                    aerom.param_space, model_dir, aerom.train_prefix, "best_params", net_suff,
+                )
 
         time_end_network = time()
         print("=================================================================")
         print("NETWORK TRAINING COMPLETE IN " + str(time_end_network - time_start_network) + " seconds")
         print("=================================================================")
 
-        # write parameters to file
-        f = open(os.path.join(input_dict["model_dir"], "best_params" + net_suff + ".pickle"), "wb")
-        pickle.dump(best_space, f)
-        f.close()
+        
 
     time_end_full = time()
     print("=================================================================")
     print("TOTAL TRAINING COMPLETE IN " + str(time_end_full - time_start_full) + " seconds")
     print("=================================================================")
+
+
+def write_param_space(space, model_dir, prefix, space_name, suffix):
+    """Pickle and save parameter space"""
+
+    # write parameters to file
+    f = open(os.path.join(model_dir, prefix + space_name + suffix + ".pickle"), "wb")
+    pickle.dump(space, f)
+    f.close()
 
 
 if __name__ == "__main__":

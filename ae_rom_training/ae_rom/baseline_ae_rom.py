@@ -15,15 +15,13 @@ class BaselineAEROM(AEROM):
 
         super().__init__(input_dict, mllib, network_suffix)
 
-        self.train_builtin = True
-
     def build(self):
         """Assemble singular model object for entire network, if possible"""
 
         self.model_obj = self.autoencoder.model_obj
 
     def train_model_builtin(
-        self, data_list_train, data_list_val, optimizer, loss, options, input_dict, params, param_prefix,
+        self, data_list_train, data_list_val, optimizer, loss, options, input_dict, params,
     ):
 
         # concatenate and shuffle data sets, since order doesn't matter
@@ -43,7 +41,7 @@ class BaselineAEROM(AEROM):
             options,
             input_dict,
             params,
-            param_prefix,
+            self.train_prefix,
         )
 
         return loss_train, loss_val

@@ -21,10 +21,6 @@ class MLModel:
         self.len_prefix = len(self.param_prefix)
         self.hyperopt_param_names = []
 
-        # layer_list contains all outputs of layer calls
-        # layer list should have dicts which have all the parameters needed for a given layer
-        # also, should specify which layer (in the list order) is its input
-
     def preproc_layer_input(self, input_dict, params):
         """Do error checking and input expansions on layer inputs.
 
