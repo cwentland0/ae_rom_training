@@ -697,6 +697,10 @@ class TFKerasLibrary(MLLibrary):
 
         return model_obj.layers[-1].get_koopman_numpy()
 
+    def eval_model(self, model_obj, input_data):
+
+        return model_obj(input_data).numpy()
+
     def load_model(self, model_dir, model_name):
 
         # TODO: add ability to load compilable model for resuming training

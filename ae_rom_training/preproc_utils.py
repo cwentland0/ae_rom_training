@@ -533,7 +533,7 @@ def split_data_set(data, split_type, val_perc):
 
 
 def hankelize(data: list, seq_length, seq_step=1):
-    """Arrange data snapshots into contiguous windows
+    """Arrange data snapshots into windows
 
     data is assumed to be a list of NumPy arrays.
     Returns a list of Hankelized matrices.
@@ -562,6 +562,43 @@ def hankelize(data: list, seq_length, seq_step=1):
             data_seqs[-1][-1, ...] = data_arr[-seq_length:, ...]
 
     return data_seqs
+
+def window(data: list, seq_length, pred_length=1, seq_step=1):
+    """Similar to Hankelization, but returns prediction ``label'' data.
+    
+    data is assumed to be a list of NumPy arrays.
+    Gets ``labels'' from the next pred_length snapshots after seq_length
+    """
+
+    # TODO: just roll this into hankelize()
+
+    data_seqs = []
+    pred_seqs = []
+    num_dims = data[0].ndim
+
+    for data_arr in data:
+        num_snaps = data_arr.shape[0]
+
+        # accommodate single-value sequences, actually need to keep this for layer inputs
+        if num_dims == 1:
+            data_arr = np.expand_dims(data_arr, axis=-1)
+
+        num_seqs = ceil((num_snaps - seq_length - pred_length + 1) / seq_step)
+        data_seqs.append(np.zeros((num_seqs, seq_length,) + data_arr.shape[1:], dtype=data_arr.dtype))
+        pred_seqs.append(np.zeros((num_seqs, pred_length,) + data_arr.shape[1:], dtype=data_arr.dtype))
+        for seq_idx in range(num_seqs):
+            idx_start = seq_idx * seq_step
+            idx_end = idx_start + seq_length
+            data_seqs[-1][seq_idx, ...] = data_arr[idx_start:idx_end, ...]
+            pred_seqs[-1][seq_idx, ...] = data_arr[idx_end : idx_end + pred_length, ...]
+
+        # account for final window
+        if idx_end != num_snaps - pred_length:
+            # TODO: if you want to roll this into hankelize, slice to None instead of -pred_length
+            data_seqs[-1][-1, ...] = data_arr[-seq_length - pred_length : -pred_length, ...]
+            pred_seqs[-1][-1, ...] = data_arr[-pred_length:, ...]
+
+    return data_seqs, pred_seqs
 
 
 def norm_switch(data: list, norm_type, axes):

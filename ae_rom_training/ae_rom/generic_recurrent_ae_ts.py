@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 
-from ae_rom_training.preproc_utils import hankelize
+from ae_rom_training.preproc_utils import window, hankelize
 from ae_rom_training.ae_rom.ae_rom import AEROM
 from ae_rom_training.autoencoder.autoencoder import Autoencoder
 from ae_rom_training.autoencoder.baseline_ae import BaselineAE
@@ -13,7 +13,10 @@ class GenericRecurrentAETS(AEROM):
     def __init__(self, input_dict, mllib, network_suffix):
 
         if input_dict["train_ts"]:
-            self.autoencoder = Autoencoder(mllib)
+            if input_dict["train_separate"]:
+                self.autoencoder = BaselineAE(mllib)
+            else:
+                self.autoencoder = Autoencoder(mllib)
             self.time_stepper = GenericRecurrent(mllib)
         else:
             self.autoencoder = BaselineAE(mllib)
@@ -58,8 +61,8 @@ class GenericRecurrentAETS(AEROM):
         # save builtin training and validation losses
         else:
 
-            loss_train_hist_path = os.path.join(model_dir, self.train_prefix + "loss_train_hist_" + self.network_suffix + ".npy")
-            loss_val_hist_path = os.path.join(model_dir, self.train_prefix + "loss_val_hist_" + self.network_suffix + ".npy")
+            loss_train_hist_path = os.path.join(model_dir, self.train_prefix + "loss_train_hist" + self.network_suffix + ".npy")
+            loss_val_hist_path = os.path.join(model_dir, self.train_prefix + "loss_val_hist" + self.network_suffix + ".npy")
             np.save(loss_train_hist_path, self.loss_train_hist)
             np.save(loss_val_hist_path, self.loss_val_hist)
 
@@ -68,24 +71,64 @@ class GenericRecurrentAETS(AEROM):
         self, data_list_train, data_list_val, optimizer, loss, options, input_dict, params,
     ):
 
+        # set up time-stepper latent variable data
+        # assumed that data has NOT been shuffled at this point
         if self.training_ts:
 
-            raise ValueError
+            seq_lookback = params["seq_lookback"]
+            seq_step = params["seq_step"]
+            pred_length = params["pred_length"]
 
+            assert input_dict["split_scheme"] not in ["random"], (
+                "Invalid split_scheme " + input_dict["split_scheme"] + " is not compatible with time series predictions"
+            )
+
+            # encode data
+            latent_vars_list_train = []
+            latent_vars_list_val = []
+
+            for data_train in data_list_train:
+                latent_vars_list_train.append(self.mllib.eval_model(self.autoencoder.encoder.model_obj, data_train))
+            for data_val in data_list_val:
+                latent_vars_list_val.append(self.mllib.eval_model(self.autoencoder.encoder.model_obj, data_val))
+
+            # window data, making inputs and labels
+            latent_vars_list_train_seqs, latent_vars_list_train_seqs_pred = window(
+                latent_vars_list_train, seq_lookback, pred_length=pred_length, seq_step=seq_step
+            )
+            latent_vars_list_val_seqs, latent_vars_list_val_seqs_pred = window(
+                latent_vars_list_val, seq_lookback, pred_length=pred_length, seq_step=seq_step
+            )
+
+            # concatenate and shuffle windowed data
+            data_train_input = np.concatenate(latent_vars_list_train_seqs, axis=0)
+            data_val_input = np.concatenate(latent_vars_list_val_seqs, axis=0)
+            data_train_output = np.concatenate(latent_vars_list_train_seqs_pred, axis=0)
+            data_val_output = np.concatenate(latent_vars_list_val_seqs_pred, axis=0)
+            shuffle_idxs = np.random.permutation(np.arange(data_train_input.shape[0]))
+            data_train_input = data_train_input[shuffle_idxs, ...]
+            data_train_output = data_train_output[shuffle_idxs, ...]
+
+        # set up autoencoder data
         else:
 
             # concatenate and shuffle data sets, since order doesn't matter
-            data_train = np.concatenate(data_list_train, axis=0)
-            data_val = np.concatenate(data_list_val, axis=0)
-            np.random.shuffle(data_train)
+            data_train_input = np.concatenate(data_list_train, axis=0)
+            data_val_input = np.concatenate(data_list_val, axis=0)
+            np.random.shuffle(data_train_input)
+
+            # make data "labels"
+            data_train_output = data_train_input
+            data_val_output = data_val_input
+
 
         # train
         self.loss_train_hist, self.loss_val_hist, loss_train, loss_val = self.mllib.train_model_builtin(
             self.model_obj,
-            data_train,
-            data_train,
-            data_val,
-            data_val,
+            data_train_input,
+            data_train_output,
+            data_val_input,
+            data_val_output,
             optimizer,
             loss,
             options,

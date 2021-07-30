@@ -46,6 +46,8 @@ class GenericRecurrent(TimeStepper):
             params["seq_lookback"],
             input_dict["latent_dim"],
         )
+
+        # TODO: this doesn't handle instances where the prediction length is greater than 1
         exp_output_shape = (input_dict["latent_dim"],)
         assert input_shape == exp_input_shape, (
             "Stepper input shape does not match latent shape: " + str(input_shape) + " vs. " + str(exp_input_shape)
