@@ -516,7 +516,7 @@ class TFKerasLibrary(MLLibrary):
             return pure_l2
         elif loss_name == "pure_mse":
             return pure_mse
-        elif loss_name == "at_ts_combined":
+        elif loss_name == "ae_ts_combined":
             return ae_ts_combined_error
         else:
             return loss_name  # assumed to be a built-in loss string

@@ -152,6 +152,7 @@ class GenericRecurrentAETS(AEROM):
             + str(seq_lookback)
             + ") must not be greater than or equal to seq_length ("
             + str(seq_length)
+            + ")"
         )
         data_list_train_seqs = hankelize(data_list_train, seq_length, seq_step=seq_step)
         data_list_val_seqs = hankelize(data_list_val, seq_length, seq_step=seq_step)
