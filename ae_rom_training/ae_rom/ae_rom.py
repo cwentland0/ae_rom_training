@@ -216,7 +216,7 @@ class AEROM:
             if default is nan:
 
                 # es_patience has no default, but is required if early_stopping = True
-                if (param_name == "es_patience") and ((self.train_prefix + "early_stopping") not in self.param_space):
+                if (param_name == "es_patience") and ("early_stopping" not in self.param_space):
                     continue
 
                 try:
