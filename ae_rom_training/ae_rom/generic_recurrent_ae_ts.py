@@ -79,35 +79,54 @@ class GenericRecurrentAETS(AEROM):
             seq_step = params["seq_step"]
             pred_length = params["pred_length"]
 
-            assert input_dict["split_scheme"] not in ["random"], (
-                "Invalid split_scheme " + input_dict["split_scheme"] + " is not compatible with time series predictions"
-            )
+            # if using "random", need to unshuffle, make sequences, the separate sequences out again
+            # TODO: this doesn't work with separate validation sets
+            # put consecutive data back together again
+            data_list_full = []
+            for idx, data_train in enumerate(data_list_train):
+                data_val = data_list_val[idx]
+                num_snaps = data_train.shape[0] + data_val.shape[0]
+                split_idxs_train = input_dict["split_idxs_train"][idx]
+                split_idxs_val = input_dict["split_idxs_val"][idx]
+                data_full = np.zeros((num_snaps,) + data_train.shape[1:], dtype=data_train.dtype)
+                data_full[split_idxs_train, ...] = data_train.copy()
+                data_full[split_idxs_val, ...] = data_val.copy()
+                data_list_full.append(data_full.copy())
 
             # encode data
-            latent_vars_list_train = []
-            latent_vars_list_val = []
-
-            for data_train in data_list_train:
-                latent_vars_list_train.append(self.mllib.eval_model(self.autoencoder.encoder.model_obj, data_train))
-            for data_val in data_list_val:
-                latent_vars_list_val.append(self.mllib.eval_model(self.autoencoder.encoder.model_obj, data_val))
+            latent_vars_list = []
+            for data_full in data_list_full:
+                latent_vars_list.append(self.mllib.eval_model(self.autoencoder.encoder.model_obj, data_full))
 
             # window data, making inputs and labels
-            latent_vars_list_train_seqs, latent_vars_list_train_seqs_pred = window(
-                latent_vars_list_train, seq_lookback, pred_length=pred_length, seq_step=seq_step
-            )
-            latent_vars_list_val_seqs, latent_vars_list_val_seqs_pred = window(
-                latent_vars_list_val, seq_lookback, pred_length=pred_length, seq_step=seq_step
+            latent_vars_list_seqs, latent_vars_list_seqs_pred = window(
+                latent_vars_list, seq_lookback, pred_length=pred_length, seq_step=seq_step
             )
 
-            # concatenate and shuffle windowed data
+            # redistribute training and validation data
+            latent_vars_list_train_seqs = []
+            latent_vars_list_val_seqs = []
+            latent_vars_list_train_seqs_pred = []
+            latent_vars_list_val_seqs_pred = []
+            for idx, latent_vars_seqs in enumerate(latent_vars_list_seqs):
+                latent_vars_seqs_pred = latent_vars_list_seqs_pred[idx]
+                # need to exclude 0:seq_lookback, subtract seq_lookback to get new sorting indices
+                # NOTE: assume_unique maintains shuffle
+                idxs_train = np.setdiff1d(input_dict["split_idxs_train"][idx], np.arange(0, seq_lookback), assume_unique=True) - seq_lookback
+                idxs_val = np.setdiff1d(input_dict["split_idxs_val"][idx], np.arange(0, seq_lookback), assume_unique=True) - seq_lookback
+                latent_vars_list_train_seqs.append(latent_vars_seqs[idxs_train, ...])
+                latent_vars_list_train_seqs_pred.append(latent_vars_seqs_pred[idxs_train, ...])
+                latent_vars_list_val_seqs.append(latent_vars_seqs[idxs_val, ...])
+                latent_vars_list_val_seqs_pred.append(latent_vars_seqs_pred[idxs_val, ...])
+                            
+            # concatenate and shuffle windowed training data
             data_train_input = np.concatenate(latent_vars_list_train_seqs, axis=0)
             data_val_input = np.concatenate(latent_vars_list_val_seqs, axis=0)
             data_train_output = np.concatenate(latent_vars_list_train_seqs_pred, axis=0)
             data_val_output = np.concatenate(latent_vars_list_val_seqs_pred, axis=0)
-            shuffle_idxs = np.random.permutation(np.arange(data_train_input.shape[0]))
-            data_train_input = data_train_input[shuffle_idxs, ...]
-            data_train_output = data_train_output[shuffle_idxs, ...]
+            # shuffle_idxs = np.random.permutation(np.arange(data_train_input.shape[0]))
+            # data_train_input = data_train_input[shuffle_idxs, ...]
+            # data_train_output = data_train_output[shuffle_idxs, ...]
 
         # set up autoencoder data
         else:
