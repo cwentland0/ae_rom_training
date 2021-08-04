@@ -16,11 +16,11 @@ class AEROM:
     Should always have an encoder and decoder, w/ optional time-stepper and/or parameter predictor.
     """
 
-    def __init__(self, input_dict, mllib, network_suffix):
+    def __init__(self, net_idx, input_dict, mllib, network_suffix):
 
+        self.net_idx = net_idx
         self.model_dir = input_dict["model_dir"]
-        self.latent_dim = input_dict["latent_dim"]
-        self.train_separate = input_dict["train_separate"]
+        self.latent_dim = input_dict["latent_dim"][net_idx]
 
         self.mllib = mllib
         self.network_suffix = network_suffix
@@ -29,13 +29,27 @@ class AEROM:
         # have to instantiate this here as well because it's part of the build_and_train call
         self.param_space = {}
 
+        # prefix for grabbing training parameters
+        if input_dict["train_ae"]:
+            if input_dict["train_ts"]:
+                self.train_prefix = ""
+            else:
+                self.train_prefix = "ae_"
+        else:
+            self.train_prefix = "ts_"
+
         if input_dict["train_ts"] and (self.time_stepper is None):
             raise ValueError("train_ts = True, but " + input_dict["aerom_type"] + " does not have a time stepper")
 
         # concatenate component networks
-        self.component_networks = self.autoencoder.component_networks.copy()
+        self.component_networks = []
+        if self.autoencoder is not None:
+            self.component_networks += self.autoencoder.component_networks.copy()
         if self.time_stepper is not None:
             self.component_networks += self.time_stepper.component_networks.copy()
+
+        # aggregate
+        self.preproc_inputs(input_dict)
 
     def check_param_vs_layers(self, param, param_list_clear, layer_list_full, layer_list_clear):
 
@@ -49,9 +63,6 @@ class AEROM:
 
         For HyperOpt, preprocesses all inputs for component networks into HyperOpt expressions.
         """
-
-        # clear out dict, since this may need to be reset for separate TS training
-        self.param_space.clear()
 
         # TODO: This doesn't need to be repeated every time an autoencoder is instantiated
         # TODO: layer_input_idx shouldn't be included in Hyperopt space
@@ -165,9 +176,14 @@ class AEROM:
                     if (
                         self.check_param_vs_layers(
                             param_name, ["output_size"], layer_types, ["dense", "koopman_continous"]
-                        ) or self.check_param_vs_layers(
-                            param_name, ["num_filters", "kern_size", "dilation", "strides"], layer_types, ["conv", "trans_conv"]
-                        ) or self.check_param_vs_layers(param_name, [], layer_types, ["conv", "trans_conv"])
+                        )
+                        or self.check_param_vs_layers(
+                            param_name,
+                            ["num_filters", "kern_size", "dilation", "strides"],
+                            layer_types,
+                            ["conv", "trans_conv"],
+                        )
+                        or self.check_param_vs_layers(param_name, [], layer_types, ["conv", "trans_conv"])
                         or self.check_param_vs_layers(param_name, ["target_shape"], layer_types, ["reshape"])
                         or self.check_param_vs_layers(param_name, ["return_sequences"], layer_types, ["lstm", "tcn"])
                         or self.check_param_vs_layers(param_name, ["dilation_tcn"], layer_types, ["tcn"])
@@ -244,7 +260,7 @@ class AEROM:
                     )
 
                     self.param_space[param_name] = hp_expression(param_key, expr_type, param_val)
-                    self.hyperopt_param_names.append(param_key)
+                    self.hyperopt_param_names.append(param_name)
 
                 # If not providing an expression, input cannot be a list
                 else:
@@ -279,18 +295,6 @@ class AEROM:
 
         # just here in case I make a calling mistake in the future
         assert self.training_ae or self.training_ts, "Must train autoencoder, time-stepper, or both."
-        
-        # prefix for grabbing training parameters
-        if self.training_ae:
-            if self.training_ts:
-                self.train_prefix = ""
-            else:
-                self.train_prefix = "ae_"
-        else:
-            self.train_prefix = "ts_"
-
-        # aggregate 
-        self.preproc_inputs(input_dict)
 
         # Keep track of Hyperopt trial number
         if input_dict["use_hyperopt"]:
@@ -303,14 +307,13 @@ class AEROM:
             )
             input_dict["trial_number"] += 1
 
-        # build autoencoder
-        # always have an autoencoder, even if it's just loaded from disk
-        assert self.autoencoder is not None, "Autoencoder not initialized for this model"
-        data_shape = data_list_train[0].shape[1:]
-        self.autoencoder.build(
-            input_dict, params, data_shape, self.training_ae, self.training_ts, self.network_suffix, batch_size=None
-        )
-        self.autoencoder.check_build(input_dict, params, data_shape)
+        # build autoencoder, if requested
+        if self.training_ae:
+            data_shape = data_list_train[0].shape[1:]
+            self.autoencoder.build(
+                input_dict, params, data_shape, self.training_ae, self.training_ts, self.network_suffix, batch_size=None
+            )
+            self.autoencoder.check_build(input_dict, params, data_shape)
 
         # build time-stepper, if requested
         if self.training_ts:

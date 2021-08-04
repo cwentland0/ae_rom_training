@@ -8,12 +8,12 @@ from ae_rom_training.autoencoder.baseline_ae import BaselineAE
 class BaselineAEROM(AEROM):
     """Simple AE ROM with only autoencoder (no time-stepper)"""
 
-    def __init__(self, input_dict, mllib, network_suffix):
+    def __init__(self, net_idx, input_dict, mllib, network_suffix):
 
-        self.autoencoder = BaselineAE(mllib)
+        self.autoencoder = BaselineAE(net_idx, mllib)
         self.time_stepper = None
 
-        super().__init__(input_dict, mllib, network_suffix)
+        super().__init__(net_idx, input_dict, mllib, network_suffix)
 
     def build(self):
         """Assemble singular model object for entire network, if possible"""
@@ -31,17 +31,7 @@ class BaselineAEROM(AEROM):
 
         # train
         self.loss_train_hist, self.loss_val_hist, loss_train, loss_val = self.mllib.train_model_builtin(
-            self.model_obj,
-            data_train,
-            data_train,
-            data_val,
-            data_val,
-            optimizer,
-            loss,
-            options,
-            input_dict,
-            params,
-            self.train_prefix,
+            self.model_obj, data_train, data_train, data_val, data_val, optimizer, loss, options, input_dict, params,
         )
 
         return loss_train, loss_val

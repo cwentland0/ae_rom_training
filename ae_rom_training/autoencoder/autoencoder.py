@@ -11,11 +11,12 @@ class Autoencoder:
     Child classes implement additional component networks and features.
     """
 
-    def __init__(self, mllib):
+    def __init__(self, net_idx, mllib):
 
+        self.net_idx = net_idx
         self.mllib = mllib
-        self.encoder = Encoder("encoder", mllib)
-        self.decoder = Decoder("decoder", mllib)
+        self.encoder = Encoder(net_idx, "encoder", mllib)
+        self.decoder = Decoder(net_idx, "decoder", mllib)
         self.component_networks = [self.encoder, self.decoder]
 
     def build(self, input_dict, params, data_shape, ae, ts, network_suffix, batch_size=None):
@@ -29,7 +30,7 @@ class Autoencoder:
             self.encoder.assemble(input_dict, params, data_shape, batch_size=batch_size)
             if input_dict["mirrored_decoder"]:
                 self.decoder.mirror_encoder(self.encoder, input_dict)
-            self.decoder.assemble(input_dict, params, input_dict["latent_dim"])
+            self.decoder.assemble(input_dict, params, input_dict["latent_dim"][self.net_idx])
         else:
             self.encoder.model_obj = self.mllib.load_model(input_dict["model_dir"], "encoder" + network_suffix)
             self.decoder.model_obj = self.mllib.load_model(input_dict["model_dir"], "decoder" + network_suffix)
@@ -51,7 +52,7 @@ class Autoencoder:
         _, decoder_output_shape = self.mllib.get_layer_io_shape(self.decoder.model_obj, -1)
 
         # check shapes
-        latent_shape = (input_dict["latent_dim"],)
+        latent_shape = (input_dict["latent_dim"][self.net_idx],)
 
         assert encoder_input_shape == data_shape, (
             "Encoder input shape does not match data shape: " + str(encoder_input_shape) + " vs. " + str(data_shape)

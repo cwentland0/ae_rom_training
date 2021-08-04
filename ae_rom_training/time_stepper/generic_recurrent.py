@@ -12,13 +12,13 @@ class GenericRecurrent(TimeStepper):
     All layers must be defined by user.
     """
 
-    def __init__(self, mllib):
+    def __init__(self, net_idx, mllib):
 
         # TODO: make assertions about return_sequence for stacked recurrent layers
 
-        self.stepper = Generic("stepper", mllib)
+        self.stepper = Generic(net_idx, "stepper", mllib)
 
-        super().__init__(mllib)
+        super().__init__(net_idx, mllib)
 
         self.component_networks = [self.stepper]
 
@@ -26,7 +26,7 @@ class GenericRecurrent(TimeStepper):
 
         # assemble generic sequential model
         self.stepper.assemble(
-            input_dict, params, (params["seq_lookback"], input_dict["latent_dim"],), batch_size=batch_size
+            input_dict, params, (params["seq_lookback"], input_dict["latent_dim"][self.net_idx],), batch_size=batch_size
         )
         self.mllib.display_model_summary(self.stepper.model_obj, displaystr="STEPPER")
         self.model_obj = self.stepper.model_obj
@@ -44,11 +44,11 @@ class GenericRecurrent(TimeStepper):
         # check shapes
         exp_input_shape = (
             params["seq_lookback"],
-            input_dict["latent_dim"],
+            input_dict["latent_dim"][self.net_idx],
         )
 
         # TODO: this doesn't handle instances where the prediction length is greater than 1
-        exp_output_shape = (input_dict["latent_dim"],)
+        exp_output_shape = (input_dict["latent_dim"][self.net_idx],)
         assert input_shape == exp_input_shape, (
             "Stepper input shape does not match latent shape: " + str(input_shape) + " vs. " + str(exp_input_shape)
         )

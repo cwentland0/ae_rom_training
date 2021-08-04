@@ -36,10 +36,10 @@ else:
 class TFKerasLibrary(MLLibrary):
     """Functionality for Tensorflow-Keras"""
 
-    def __init__(self, input_dict):
+    def __init__(self, run_gpu=False):
 
         tf.random.set_seed(RANDOM_SEED)
-        super().__init__(input_dict)
+        super().__init__(run_gpu)
 
     def assemble_model(self):
         pass

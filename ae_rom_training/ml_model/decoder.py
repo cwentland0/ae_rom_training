@@ -4,9 +4,9 @@ from ae_rom_training.ml_model.ml_model import MLModel
 
 
 class Decoder(MLModel):
-    def __init__(self, param_prefix, mllib):
+    def __init__(self, net_idx, param_prefix, mllib):
 
-        super().__init__(param_prefix, mllib)
+        super().__init__(net_idx, param_prefix, mllib)
 
     def mirror_encoder(self, encoder, input_dict):
         """Build parameter space by mirroring encoder."""

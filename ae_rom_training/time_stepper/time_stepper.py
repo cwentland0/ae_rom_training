@@ -5,6 +5,7 @@ class TimeStepper:
     to child class implementations.
     """
 
-    def __init__(self, mllib):
+    def __init__(self, net_idx, mllib):
 
+        self.net_idx = net_idx
         self.mllib = mllib

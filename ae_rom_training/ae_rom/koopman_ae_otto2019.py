@@ -12,19 +12,19 @@ from ae_rom_training.time_stepper.koopman import Koopman
 class KoopmanAEOtto2019(AEROM):
     """Autoencoder which learns discrete Koopman, via Otto and Rowley (2019)"""
 
-    def __init__(self, input_dict, mllib, network_suffix):
+    def __init__(self, net_idx, input_dict, mllib, network_suffix):
 
         if input_dict["train_ts"]:
             if input_dict["train_separate"]:
-                self.autoencoder = BaselineAE(mllib)
+                self.autoencoder = BaselineAE(net_idx, mllib)
             else:
-                self.autoencoder = Autoencoder(mllib)
-            self.time_stepper = Koopman(input_dict, mllib, continuous=False)
+                self.autoencoder = Autoencoder(net_idx, mllib)
+            self.time_stepper = Koopman(net_idx, input_dict, mllib, continuous=False)
         else:
-            self.autoencoder = BaselineAE(mllib)
+            self.autoencoder = BaselineAE(net_idx, mllib)
             self.time_stepper = None
 
-        super().__init__(input_dict, mllib, network_suffix)
+        super().__init__(net_idx, input_dict, mllib, network_suffix)
 
     def build(self):
         """Assemble singular model object for entire network, if possible"""
@@ -62,8 +62,12 @@ class KoopmanAEOtto2019(AEROM):
         # save builtin training and validation losses
         else:
 
-            loss_train_hist_path = os.path.join(model_dir, self.train_prefix + "loss_train_hist" + self.network_suffix + ".npy")
-            loss_val_hist_path = os.path.join(model_dir, self.train_prefix + "loss_val_hist" + self.network_suffix + ".npy")
+            loss_train_hist_path = os.path.join(
+                model_dir, self.train_prefix + "loss_train_hist" + self.network_suffix + ".npy"
+            )
+            loss_val_hist_path = os.path.join(
+                model_dir, self.train_prefix + "loss_val_hist" + self.network_suffix + ".npy"
+            )
             np.save(loss_train_hist_path, self.loss_train_hist)
             np.save(loss_val_hist_path, self.loss_val_hist)
 
@@ -168,15 +172,7 @@ class KoopmanAEOtto2019(AEROM):
         ]
 
         loss_train_hist, loss_val_hist, loss_addtl_train_list, loss_addtl_val_list = self.mllib.train_model_custom(
-            self,
-            data_train_seqs,
-            data_train_seqs,
-            data_val_seqs,
-            data_val_seqs,
-            optimizer,
-            loss,
-            options,
-            params,
+            self, data_train_seqs, data_train_seqs, data_val_seqs, data_val_seqs, optimizer, loss, options, params,
         )
 
         self.loss_train_recon = loss_addtl_train_list[0]

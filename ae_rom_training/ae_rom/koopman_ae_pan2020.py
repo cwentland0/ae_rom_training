@@ -11,10 +11,10 @@ from ae_rom_training.time_stepper.koopman import Koopman
 class KoopmanAEPan2020(AEROM):
     """Autoencoder which learns discrete Koopman, via Otto and Rowley (2019)"""
 
-    def __init__(self, input_dict, mllib, network_suffix):
+    def __init__(self, net_idx, input_dict, mllib, network_suffix):
 
-        self.autoencoder = Autoencoder(mllib)
-        self.time_stepper = Koopman(input_dict, mllib, continuous=True)
+        self.autoencoder = Autoencoder(net_idx, mllib)
+        self.time_stepper = Koopman(net_idx, input_dict, mllib, continuous=True)
 
         # check that time inputs are present
         assert (
@@ -27,7 +27,7 @@ class KoopmanAEPan2020(AEROM):
             ), "Must provide time_init_list_val for continuous Koopman"
             assert input_dict["dt_list_val"][0] is not None, "Must provide dt_list_val for continuous Koopman"
 
-        super().__init__(input_dict, mllib, network_suffix)
+        super().__init__(net_idx, input_dict, mllib, network_suffix)
 
         # TODO: handle separate training, blech
         self.train_builtin = False

@@ -58,17 +58,59 @@ def read_text_file(inputFile):
 
 def catch_input(in_dict, in_key, default_val):
 
-    default_type = type(default_val)
     try:
-        # if NoneType passed as default, trust user
-        if isinstance(default_type, type(None)):
+        # if None passed as default, trust user
+        if default_val is None:
             out_val = in_dict[in_key]
         else:
+            default_type = type(default_val)
             out_val = default_type(in_dict[in_key])
     except:
         out_val = default_val
 
     return out_val
+
+
+def catch_list(in_dict, in_key, default, len_highest=1):
+
+    list_of_lists_flag = type(default[0]) == list
+
+    try:
+        inList = in_dict[in_key]
+
+        if len(inList) == 0:
+            raise ValueError
+
+        # List of lists
+        if list_of_lists_flag:
+            val_list = []
+            for list_idx in range(len_highest):
+                # If default value is None, trust user
+                if default[0][0] is None:
+                    val_list.append(inList[list_idx])
+                else:
+                    type_default = type(default[0][0])
+                    cast_in_list = [type_default(inVal) for inVal in inList[list_idx]]
+                    val_list.append(cast_in_list)
+
+        # Normal list
+        else:
+            # If default value is None, trust user
+            if default[0] is None:
+                val_list = inList
+            else:
+                type_default = type(default[0])
+                val_list = [type_default(inVal) for inVal in inList]
+
+    except:
+        if list_of_lists_flag:
+            val_list = []
+            for list_idx in range(len_highest):
+                val_list.append(default[0])
+        else:
+            val_list = default
+
+    return val_list
 
 
 def read_input_file(input_file):
@@ -89,11 +131,15 @@ def read_input_file(input_file):
 
     # path inputs
     input_dict["data_dir"] = input_dict_raw["data_dir"]
+    input_dict["data_encoded"] = catch_input(input_dict_raw, "data_encoded", False)
     input_dict["data_files_train"] = input_dict_raw["data_files_train"]
-    input_dict["data_files_val"] = catch_input(input_dict_raw, "data_files_val", [None])
+    input_dict["data_files_val"] = catch_list(input_dict_raw, "data_files_val", [None])
     input_dict["model_dir"] = os.path.join(input_dict_raw["model_dir"], input_dict_raw["model_label"])
+    input_dict["ae_dir"] = catch_input(input_dict_raw, "ae_dir", "")
     if not os.path.exists(input_dict["model_dir"]):
         os.makedirs(input_dict["model_dir"])
+    if input_dict["ae_dir"] is not None:
+        _, input_dict["ae_label"] = os.path.split(input_dict["ae_dir"])
 
     # data inputs
     input_dict["var_network_idxs"] = list(input_dict_raw["var_network_idxs"])
@@ -150,16 +196,13 @@ def read_input_file(input_file):
     # global parameters
     input_dict["aerom_type"] = input_dict_raw["aerom_type"]
     input_dict["latent_dim"] = input_dict_raw["latent_dim"]
+    if isinstance(input_dict["latent_dim"], int):
+        input_dict["latent_dim"] = [input_dict["latent_dim"]]
+    if len(input_dict["latent_dim"]) == 1:
+        input_dict["latent_dim"] *= input_dict["num_networks"]
     input_dict["train_ae"] = catch_input(input_dict_raw, "train_ae", False)
     input_dict["train_ts"] = catch_input(input_dict_raw, "train_ts", False)
-    input_dict["train_separate"] = catch_input(input_dict_raw, "train_separate", False)
     assert input_dict["train_ae"] or input_dict["train_ts"], "Must set train_ae = True or train_ts = True"
-    if input_dict["train_ae"] != input_dict["train_ts"]:
-        input_dict["train_separate"] = True
-    if not input_dict["train_separate"]:
-        assert input_dict["train_ae"] and input_dict["train_ts"], (
-            "If train_separate = False, must have train_ae = True and train_ts = True"
-        )
 
     # misc
     input_dict["precision"] = catch_input(
@@ -211,9 +254,10 @@ def get_train_val_data(input_dict):
         input_dict["idx_end_list_train"],
         input_dict["idx_skip_list_train"],
         input_dict["data_order"],
+        encoded=input_dict["data_encoded"],
+        net_idxs=input_dict["var_network_idxs"],
+        ae_label=input_dict["ae_label"],
     )
-    # assumed spatially-oriented data, so subtract samples and channels dimensions
-    input_dict["num_dims"] = data_list_raw_train[0].ndim - 2
 
     # get validation data sets, if given
     if input_dict["data_files_val"][0] is not None:
@@ -224,6 +268,9 @@ def get_train_val_data(input_dict):
             input_dict["idx_end_list_val"],
             input_dict["idx_skip_list_val"],
             input_dict["data_order_val"],
+            encoded=input_dict["data_encoded"],
+            net_idxs=input_dict["var_network_idxs"],
+            ae_label=input_dict["ae_label"],
         )
     else:
         data_list_raw_val = None
@@ -236,11 +283,19 @@ def get_train_val_data(input_dict):
     split_idxs_list_train, split_idxs_list_val = [], []
     for net_idx, var_idxs in enumerate(input_dict["var_network_idxs"]):
 
-        data_list_var_train_in = get_vars_from_data(data_list_raw_train, var_idxs)
-        if data_list_raw_val is not None:
-            data_list_var_val_in = get_vars_from_data(data_list_raw_val, var_idxs)
+        # if data has already been encoded, they were already broken up by network
+        if input_dict["data_encoded"]:
+            data_list_var_train_in = data_list_raw_train[net_idx]
+            if data_list_raw_val is not None:
+                data_list_var_val_in = data_list_raw_val[net_idx]
+            else:
+                data_list_var_val_in = None
         else:
-            data_list_var_val_in = None
+            data_list_var_train_in = get_vars_from_data(data_list_raw_train, var_idxs)
+            if data_list_raw_val is not None:
+                data_list_var_val_in = get_vars_from_data(data_list_raw_val, var_idxs)
+            else:
+                data_list_var_val_in = None
 
         # pre-process data
         # includes centering, normalization, and train/validation split
@@ -257,16 +312,27 @@ def get_train_val_data(input_dict):
 
         # up until now, data has been in NCHW, tranpose if requesting NHWC
         if input_dict["network_order"] == "NHWC":
-            if input_dict["num_dims"] == 1:
+            num_dims = data_list_var_train[0].ndim - 2  # subtract samples and channels dimensions
+            if num_dims == 1:
                 trans_axes = (0, 2, 1)
-            elif input_dict["num_dims"] == 2:
+            elif num_dims == 2:
                 trans_axes = (0, 2, 3, 1)
-            elif input_dict["num_dims"] == 3:
+            elif num_dims == 3:
                 trans_axes = (0, 2, 3, 4, 1)
             for idx, data_arr in enumerate(data_list_var_train):
                 data_list_var_train[idx] = np.transpose(data_arr, trans_axes)
             for idx, data_arr in enumerate(data_list_var_val):
                 data_list_var_val[idx] = np.transpose(data_arr, trans_axes)
+            squeeze_axis = 1
+        else:
+            squeeze_axis = -1
+
+        # if training on encoded data, squeeze dummy spatial dimension
+        if input_dict["data_encoded"]:
+            for idx, data_arr in enumerate(data_list_var_train):
+                data_list_var_train[idx] = np.squeeze(data_arr, axis=squeeze_axis)
+            for idx, data_arr in enumerate(data_list_var_val):
+                data_list_var_val[idx] = np.squeeze(data_arr, axis=squeeze_axis)
 
         data_list_train.append(data_list_var_train)
         data_list_val.append(data_list_var_val)
@@ -276,82 +342,119 @@ def get_train_val_data(input_dict):
     return data_list_train, data_list_val, split_idxs_list_train, split_idxs_list_val
 
 
-def agg_data_sets(data_dir, data_loc_list, idx_start_list, idx_end_list, idx_skip_list, data_order):
+def agg_data_sets(
+    data_dir,
+    data_loc_list,
+    idx_start_list,
+    idx_end_list,
+    idx_skip_list,
+    data_order,
+    encoded=False,
+    net_idxs=None,
+    ae_label=None,
+):
     """Given list of data locations, aggregate data sets.
 
     Puts all data in NCHW format.
     """
 
-    data_raw = []
+    if encoded:
+        assert (net_idxs is not None) and (
+            ae_label is not None
+        ), "If aggregating encoded data, must supply net_idxs and ae_label"
+        data_dir = os.path.join(data_dir, "encodings", ae_label)
+
+    if encoded:
+        data_raw = [[]] * len(net_idxs)
+    else:
+        data_raw = []
     for file_count, data_file in enumerate(data_loc_list):
-        data_loc = os.path.join(data_dir, data_file)
-        data_load = np.load(data_loc)
 
-        num_dims = data_load.ndim - 2  # excludes N and C dimensions
+        data_load = []
+        # if encoded data, need data from each network
+        if encoded:
+            data_file_encoded = data_file[:-4]  # strip .npy
+            for var_idxs in net_idxs:
+                suffix = ""
+                for var_idx in var_idxs:
+                    suffix += "_" + str(var_idx)
+                data_file_encoded += suffix + ".npy"
+                data_loc = os.path.join(data_dir, data_file_encoded)
+                data_load.append(np.load(data_loc))
 
-        # For now, everything goes to NCHW, will get transposed to NHWC right before training if requested
-        if data_order != "NCHW":
-            if data_order == "NHWC":
-                if num_dims == 1:
-                    trans_axes = (0, 2, 1)
-                elif num_dims == 2:
-                    trans_axes = (0, 3, 1, 2)
-                elif num_dims == 3:
-                    trans_axes = (0, 4, 1, 2, 3)
+        # if full state data, should only be one file
+        else:
+            data_loc = os.path.join(data_dir, data_file)
+            data_load.append(np.load(data_loc))
 
-            elif data_order == "HWCN":
-                if num_dims == 1:
-                    trans_axes = (2, 1, 0)
-                elif num_dims == 2:
-                    trans_axes = (3, 2, 0, 1)
-                elif num_dims == 3:
-                    trans_axes = (4, 3, 0, 1, 2)
+        num_dims = data_load[0].ndim - 2  # excludes N and C dimensions
 
-            elif data_order == "HWNC":
-                if num_dims == 1:
-                    trans_axes = (1, 2, 0)
-                elif num_dims == 2:
-                    trans_axes = (2, 3, 0, 1)
-                elif num_dims == 3:
-                    trans_axes = (3, 4, 0, 1, 2)
+        for data in data_load:
 
-            elif data_order == "CHWN":
-                if num_dims == 1:
-                    trans_axes = (2, 0, 1)
-                elif num_dims == 2:
-                    trans_axes = (3, 0, 1, 2)
-                elif num_dims == 3:
-                    trans_axes = (4, 0, 1, 2, 3)
+            # For now, everything goes to NCHW, will get transposed to NHWC right before training if requested
+            if data_order != "NCHW":
+                if data_order == "NHWC":
+                    if num_dims == 1:
+                        trans_axes = (0, 2, 1)
+                    elif num_dims == 2:
+                        trans_axes = (0, 3, 1, 2)
+                    elif num_dims == 3:
+                        trans_axes = (0, 4, 1, 2, 3)
 
-            elif data_order == "CNHW":
-                if num_dims == 1:
-                    trans_axes = (1, 0, 2)
-                elif num_dims == 2:
-                    trans_axes = (1, 0, 2, 3)
-                elif num_dims == 3:
-                    trans_axes = (1, 0, 2, 3, 4)
+                elif data_order == "HWCN":
+                    if num_dims == 1:
+                        trans_axes = (2, 1, 0)
+                    elif num_dims == 2:
+                        trans_axes = (3, 2, 0, 1)
+                    elif num_dims == 3:
+                        trans_axes = (4, 3, 0, 1, 2)
 
+                elif data_order == "HWNC":
+                    if num_dims == 1:
+                        trans_axes = (1, 2, 0)
+                    elif num_dims == 2:
+                        trans_axes = (2, 3, 0, 1)
+                    elif num_dims == 3:
+                        trans_axes = (3, 4, 0, 1, 2)
+
+                elif data_order == "CHWN":
+                    if num_dims == 1:
+                        trans_axes = (2, 0, 1)
+                    elif num_dims == 2:
+                        trans_axes = (3, 0, 1, 2)
+                    elif num_dims == 3:
+                        trans_axes = (4, 0, 1, 2, 3)
+
+                elif data_order == "CNHW":
+                    if num_dims == 1:
+                        trans_axes = (1, 0, 2)
+                    elif num_dims == 2:
+                        trans_axes = (1, 0, 2, 3)
+                    elif num_dims == 3:
+                        trans_axes = (1, 0, 2, 3, 4)
+
+                else:
+                    raise ValueError("Invalid data_order: " + str(data_order))
+                data = np.transpose(data, axes=trans_axes)
+
+            # extract a range of iterations
+            if num_dims == 1:
+                data = data[idx_start_list[file_count] : idx_end_list[file_count] : idx_skip_list[file_count], :, :]
+            elif num_dims == 2:
+                data = data[idx_start_list[file_count] : idx_end_list[file_count] : idx_skip_list[file_count], :, :, :]
+            elif num_dims == 3:
+                data = data[
+                    idx_start_list[file_count] : idx_end_list[file_count] : idx_skip_list[file_count], :, :, :, :
+                ]
+
+            # aggregate all data sets
+            # if encoded, data_raw is a list of lists, sublists correspond to latent variable datasets for each network
+            if encoded:
+                for net_idx in range(len(net_idxs)):
+                    data_raw[net_idx].append(data.copy())
+            # if full state data, data_raw is a list, entries are np.ndarrays with state snapshots
             else:
-                raise ValueError("Invalid data_order: " + str(data_order))
-
-            data_load = np.transpose(data_load, axes=trans_axes)
-
-        # extract a range of iterations
-        if num_dims == 1:
-            data_load = data_load[
-                idx_start_list[file_count] : idx_end_list[file_count] : idx_skip_list[file_count], :, :
-            ]
-        elif num_dims == 2:
-            data_load = data_load[
-                idx_start_list[file_count] : idx_end_list[file_count] : idx_skip_list[file_count], :, :, :
-            ]
-        elif num_dims == 3:
-            data_load = data_load[
-                idx_start_list[file_count] : idx_end_list[file_count] : idx_skip_list[file_count], :, :, :, :
-            ]
-
-        # aggregate all data sets
-        data_raw.append(data_load.copy())
+                data_raw.append(data.copy())
 
     return data_raw
 
@@ -378,6 +481,8 @@ def preproc_raw_data(
             data_list_train_var_cent, _ = center_data_set(
                 data_list_train_var, centering_scheme, model_dir, network_suffix, save_cent=True
             )
+        else:
+            data_list_train_var_cent = data_list_train_var
 
         # concatenate samples after centering
         for dataset_num, data_arr in enumerate(data_list_train_var_cent):
@@ -468,7 +573,7 @@ def center_switch(data: list, cent_type):
 
     # no centering
     elif cent_type == "none":
-        cent_prof = [np.zeros((1,) + data_arr.shape[1:], dtype=data_arr.dtype) for data_arr in data]
+        cent_prof = np.zeros((1,) + data[0].shape[1:], dtype=data[0].dtype)
 
     else:
         raise ValueError("Invalid choice of cent_type: " + cent_type)
@@ -562,6 +667,7 @@ def hankelize(data: list, seq_length, seq_step=1):
             data_seqs[-1][-1, ...] = data_arr[-seq_length:, ...]
 
     return data_seqs
+
 
 def window(data: list, seq_length, pred_length=1, seq_step=1):
     """Similar to Hankelization, but returns prediction ``label'' data.
@@ -679,9 +785,10 @@ def normalize_data_set(data: list, norm_type, model_dir, network_suffix, norms=N
 
     return data, norm_sub, norm_fac
 
+
 def remove_prefix(text: str, prefix: str):
     if text.startswith(prefix):
-        return text[len(prefix):]
+        return text[len(prefix) :]
     return text
 
 

@@ -7,10 +7,10 @@ class KoopmanContinuous(MLModel):
     Computes advance from initial state via x(t_0) exp(t_{n+1} * K).
     """
 
-    def __init__(self, param_prefix, input_dict, mllib):
+    def __init__(self, net_idx, param_prefix, input_dict, mllib):
 
         input_dict[param_prefix + "_layer_type"] = ["koopman_continuous"]
-        input_dict[param_prefix + "_output_size"] = [input_dict["latent_dim"]]
+        input_dict[param_prefix + "_output_size"] = [input_dict["latent_dim"][net_idx]]
         input_dict[param_prefix + "_layer_input_idx"] = [-1]
         input_dict[param_prefix + "_use_bias"] = False
         input_dict[param_prefix + "_activation"] = "linear"
@@ -35,7 +35,7 @@ class KoopmanContinuous(MLModel):
         if self.init_dmd:
             input_dict[param_prefix + "_kern_init"] = ["glorot_uniform"]
 
-        super().__init__(param_prefix, mllib)
+        super().__init__(net_idx, param_prefix, mllib)
 
     def get_koopman(self):
         """Retrieve linear operator from model object."""

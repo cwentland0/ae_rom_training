@@ -10,19 +10,24 @@ from ae_rom_training.time_stepper.generic_recurrent import GenericRecurrent
 
 
 class GenericRecurrentAETS(AEROM):
-    def __init__(self, input_dict, mllib, network_suffix):
+    def __init__(self, net_idx, input_dict, mllib, network_suffix):
 
+        # get time stepper
         if input_dict["train_ts"]:
-            if input_dict["train_separate"]:
-                self.autoencoder = BaselineAE(mllib)
-            else:
-                self.autoencoder = Autoencoder(mllib)
-            self.time_stepper = GenericRecurrent(mllib)
+            self.time_stepper = GenericRecurrent(net_idx, mllib)
         else:
-            self.autoencoder = BaselineAE(mllib)
             self.time_stepper = None
 
-        super().__init__(input_dict, mllib, network_suffix)
+        # get autoencoder
+        if input_dict["train_ae"]:
+            if input_dict["train_ts"]:
+                self.autoencoder = BaselineAE(net_idx, mllib)
+            else:
+                self.autoencoder = Autoencoder(net_idx, mllib)
+        else:
+            self.autoencoder = None
+
+        super().__init__(net_idx, input_dict, mllib, network_suffix)
 
     def build(self):
         """Assemble singular model object for entire network, if possible"""
@@ -38,12 +43,12 @@ class GenericRecurrentAETS(AEROM):
             # will run builtin training on time-stepper
             self.model_obj = self.time_stepper.model_obj
 
-
     def save(self, model_dir):
         """Save individual networks and losses in AE ROM"""
-        
+
         # save models
-        self.autoencoder.save(model_dir, self.network_suffix)
+        if self.training_ae:
+            self.autoencoder.save(model_dir, self.network_suffix)
         if self.training_ts:
             self.time_stepper.save(model_dir, self.network_suffix)
 
@@ -61,25 +66,31 @@ class GenericRecurrentAETS(AEROM):
         # save builtin training and validation losses
         else:
 
-            loss_train_hist_path = os.path.join(model_dir, self.train_prefix + "loss_train_hist" + self.network_suffix + ".npy")
-            loss_val_hist_path = os.path.join(model_dir, self.train_prefix + "loss_val_hist" + self.network_suffix + ".npy")
+            loss_train_hist_path = os.path.join(
+                model_dir, self.train_prefix + "loss_train_hist" + self.network_suffix + ".npy"
+            )
+            loss_val_hist_path = os.path.join(
+                model_dir, self.train_prefix + "loss_val_hist" + self.network_suffix + ".npy"
+            )
             np.save(loss_train_hist_path, self.loss_train_hist)
             np.save(loss_val_hist_path, self.loss_val_hist)
-
 
     def train_model_builtin(
         self, data_list_train, data_list_val, optimizer, loss, options, input_dict, params,
     ):
+        """Train time stepper with ML library built-in functions.
+
+        Here, data_list_train, data_list_val contain the standardized, encoded latent variables
+        """
 
         # set up time-stepper latent variable data
-        # assumed that data has NOT been shuffled at this point
         if self.training_ts:
 
             seq_lookback = params["seq_lookback"]
             seq_step = params["seq_step"]
             pred_length = params["pred_length"]
 
-            # if using "random", need to unshuffle, make sequences, the separate sequences out again
+            # if using "random", need to unshuffle, make sequences, then separate sequences out again
             # TODO: this doesn't work with separate validation sets
             # put consecutive data back together again
             data_list_full = []
@@ -93,14 +104,9 @@ class GenericRecurrentAETS(AEROM):
                 data_full[split_idxs_val, ...] = data_val.copy()
                 data_list_full.append(data_full.copy())
 
-            # encode data
-            latent_vars_list = []
-            for data_full in data_list_full:
-                latent_vars_list.append(self.mllib.eval_model(self.autoencoder.encoder.model_obj, data_full))
-
             # window data, making inputs and labels
             latent_vars_list_seqs, latent_vars_list_seqs_pred = window(
-                latent_vars_list, seq_lookback, pred_length=pred_length, seq_step=seq_step
+                data_list_full, seq_lookback, pred_length=pred_length, seq_step=seq_step
             )
 
             # redistribute training and validation data
@@ -112,21 +118,27 @@ class GenericRecurrentAETS(AEROM):
                 latent_vars_seqs_pred = latent_vars_list_seqs_pred[idx]
                 # need to exclude 0:seq_lookback, subtract seq_lookback to get new sorting indices
                 # NOTE: assume_unique maintains shuffle
-                idxs_train = np.setdiff1d(input_dict["split_idxs_train"][idx], np.arange(0, seq_lookback), assume_unique=True) - seq_lookback
-                idxs_val = np.setdiff1d(input_dict["split_idxs_val"][idx], np.arange(0, seq_lookback), assume_unique=True) - seq_lookback
+                idxs_train = (
+                    np.setdiff1d(input_dict["split_idxs_train"][idx], np.arange(0, seq_lookback), assume_unique=True)
+                    - seq_lookback
+                )
+                idxs_val = (
+                    np.setdiff1d(input_dict["split_idxs_val"][idx], np.arange(0, seq_lookback), assume_unique=True)
+                    - seq_lookback
+                )
                 latent_vars_list_train_seqs.append(latent_vars_seqs[idxs_train, ...])
                 latent_vars_list_train_seqs_pred.append(latent_vars_seqs_pred[idxs_train, ...])
                 latent_vars_list_val_seqs.append(latent_vars_seqs[idxs_val, ...])
                 latent_vars_list_val_seqs_pred.append(latent_vars_seqs_pred[idxs_val, ...])
-                            
+
             # concatenate and shuffle windowed training data
             data_train_input = np.concatenate(latent_vars_list_train_seqs, axis=0)
             data_val_input = np.concatenate(latent_vars_list_val_seqs, axis=0)
             data_train_output = np.concatenate(latent_vars_list_train_seqs_pred, axis=0)
             data_val_output = np.concatenate(latent_vars_list_val_seqs_pred, axis=0)
-            # shuffle_idxs = np.random.permutation(np.arange(data_train_input.shape[0]))
-            # data_train_input = data_train_input[shuffle_idxs, ...]
-            # data_train_output = data_train_output[shuffle_idxs, ...]
+            shuffle_idxs = np.random.permutation(np.arange(data_train_input.shape[0]))
+            data_train_input = data_train_input[shuffle_idxs, ...]
+            data_train_output = data_train_output[shuffle_idxs, ...]
 
         # set up autoencoder data
         else:
@@ -139,7 +151,6 @@ class GenericRecurrentAETS(AEROM):
             # make data "labels"
             data_train_output = data_train_input
             data_val_output = data_val_input
-
 
         # train
         self.loss_train_hist, self.loss_val_hist, loss_train, loss_val = self.mllib.train_model_builtin(

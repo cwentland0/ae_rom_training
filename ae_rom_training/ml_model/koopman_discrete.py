@@ -7,7 +7,7 @@ class KoopmanDiscrete(MLModel):
     Extremely simple, just a single linear dense layer with zero bias, no regularization.
     """
 
-    def __init__(self, param_prefix, input_dict, mllib):
+    def __init__(self, net_idx, param_prefix, input_dict, mllib):
 
         input_dict[param_prefix + "_layer_type"] = ["dense"]
         input_dict[param_prefix + "_layer_input_idx"] = [-1]
@@ -20,9 +20,9 @@ class KoopmanDiscrete(MLModel):
         input_dict[param_prefix + "_bias_reg"] = None
         input_dict[param_prefix + "_bias_reg_val"] = 0.0
         input_dict[param_prefix + "_bias_init"] = None
-        input_dict[param_prefix + "_output_size"] = input_dict["latent_dim"]
+        input_dict[param_prefix + "_output_size"] = input_dict["latent_dim"][net_idx]
 
-        super().__init__(param_prefix, mllib)
+        super().__init__(net_idx, param_prefix, mllib)
 
     def get_koopman(self):
         """Retrieve linear operator from model object.

@@ -7,9 +7,9 @@ class BaselineAE(Autoencoder):
     The main distinction with parent Autoencoder is the merging of the encoder and decoder for single-model training.
     """
 
-    def __init__(self, mllib):
+    def __init__(self, net_idx, mllib):
 
-        super().__init__(mllib)
+        super().__init__(net_idx, mllib)
 
         # no extra networks are added to component_networks
 

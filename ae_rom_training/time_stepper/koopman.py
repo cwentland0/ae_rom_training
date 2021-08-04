@@ -10,14 +10,14 @@ from ae_rom_training.ml_model.koopman_continuous import KoopmanContinuous
 class Koopman(TimeStepper):
     """Model defining a discrete Koopman operator."""
 
-    def __init__(self, input_dict, mllib, continuous=False):
+    def __init__(self, net_idx, input_dict, mllib, continuous=False):
 
         self.continuous = continuous
         if self.continuous:
-            self.stepper = KoopmanContinuous("koopman", input_dict, mllib)
+            self.stepper = KoopmanContinuous(net_idx, "koopman", input_dict, mllib)
         else:
-            self.stepper = KoopmanDiscrete("koopman", input_dict, mllib)
-        super().__init__(mllib)
+            self.stepper = KoopmanDiscrete(net_idx, "koopman", input_dict, mllib)
+        super().__init__(net_idx, mllib)
 
         self.component_networks = [self.stepper]
 
@@ -47,7 +47,7 @@ class Koopman(TimeStepper):
 
         # assemble Koopman layer
         # TODO: batch_size may be inappropriate here?
-        self.stepper.assemble(input_dict, params, (input_dict["latent_dim"],), batch_size=batch_size)
+        self.stepper.assemble(input_dict, params, (input_dict["latent_dim"][self.net_idx],), batch_size=batch_size)
         self.mllib.display_model_summary(self.stepper.model_obj, displaystr="KOOPMAN")
 
         self.model_obj = self.stepper.model_obj
@@ -63,7 +63,7 @@ class Koopman(TimeStepper):
         koopman_op_input_shape, koopman_op_output_shape = self.mllib.get_layer_io_shape(self.stepper.model_obj, -1)
 
         # check shapes
-        latent_shape = (input_dict["latent_dim"],)
+        latent_shape = (input_dict["latent_dim"][self.net_idx],)
         assert koopman_input_shape == latent_shape, (
             "Koopman input shape does not match latent shape: " + str(koopman_input_shape) + " vs. " + str(latent_shape)
         )

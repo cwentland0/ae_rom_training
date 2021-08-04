@@ -23,17 +23,17 @@ if TORCH_IMPORT_SUCCESS:
     from ae_rom_training.ml_library.pytorch.pytorch_library import PyTorchLibrary
 
 
-def get_ml_library(input_dict):
+def get_ml_library(mllib_name, run_gpu):
     """Helper function to retrieve machine learning library helper classes."""
 
     # check that desired ML library is installed and requested model is compatible
-    if input_dict["mllib_name"] == "tfkeras":
+    if mllib_name == "tfkeras":
         assert TFKERAS_IMPORT_SUCCESS, "Tensorflow failed to import, please check that it is installed"
-        mllib = TFKerasLibrary(input_dict)
-    elif input_dict["mllib_name"] == "pytorch":
+        mllib = TFKerasLibrary(run_gpu)
+    elif mllib_name == "pytorch":
         assert TORCH_IMPORT_SUCCESS, "PyTorch failed to import, please check that it is installed."
-        mllib = PyTorchLibrary(input_dict)
+        mllib = PyTorchLibrary(run_gpu)
     else:
-        raise ValueError("Invalid mllib_name: " + str(input_dict["mllib_name"]))
+        raise ValueError("Invalid mllib_name: " + str(mllib_name))
 
     return mllib

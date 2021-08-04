@@ -8,7 +8,7 @@ import numpy as np
 from hyperopt import fmin, Trials, space_eval
 
 from ae_rom_training.constants import RANDOM_SEED
-from ae_rom_training.preproc_utils import read_input_file, get_train_val_data
+from ae_rom_training.preproc_utils import catch_input, read_input_file, get_train_val_data
 from ae_rom_training.ml_library import get_ml_library
 from ae_rom_training.ae_rom.baseline_ae_rom import BaselineAEROM
 from ae_rom_training.ae_rom.koopman_ae_otto2019 import KoopmanAEOtto2019
@@ -44,7 +44,8 @@ def main():
                 pass
 
     # get ML library to use for this training session
-    mllib = get_ml_library(input_dict)
+    run_gpu = catch_input(input_dict, "run_gpu", False)
+    mllib = get_ml_library(input_dict["mllib_name"], run_gpu)
 
     # get training and validation data
     data_list_train, data_list_val, split_idxs_list_train, split_idxs_list_val = get_train_val_data(input_dict)
@@ -57,13 +58,13 @@ def main():
     for net_idx in range(input_dict["num_networks"]):
         net_suff = input_dict["network_suffixes"][net_idx]
         if aerom_type == "baseline":
-            aerom_list.append(BaselineAEROM(input_dict, mllib, net_suff))
+            aerom_list.append(BaselineAEROM(net_idx, input_dict, mllib, net_suff))
         elif aerom_type == "koopman_otto2019":
-            aerom_list.append(KoopmanAEOtto2019(input_dict, mllib, network_suffix))
+            aerom_list.append(KoopmanAEOtto2019(net_idx, input_dict, mllib, network_suffix))
         elif aerom_type == "koopman_pan2020":
-            aerom_list.append(KoopmanAEPan2020(input_dict, mllib, network_suffix))
+            aerom_list.append(KoopmanAEPan2020(net_idx, input_dict, mllib, network_suffix))
         elif aerom_type == "generic_recurrent":
-            aerom_list.append(GenericRecurrentAETS(input_dict, mllib, network_suffix))
+            aerom_list.append(GenericRecurrentAETS(net_idx, input_dict, mllib, network_suffix))
         else:
             raise ValueError("Invalid aerom_type selection: " + str(aerom_type))
 
@@ -91,13 +92,36 @@ def main():
             print("\nPERFORMING HYPER-PARAMETER OPTIMIZATION\n")
 
             # wrap objective function to pass additional arguments
-            objective_func_wrapped = partial(
-                aerom.build_and_train,
-                input_dict=input_dict,
-                data_list_train=data_list_train_net,
-                data_list_val=data_list_val_net,
-            )
+            if input_dict["train_ae"] != input_dict["train_ts"]:
+                if input_dict["train_ae"]:
+                    objective_func_wrapped = partial(
+                        aerom.build_and_train,
+                        input_dict=input_dict,
+                        data_list_train=data_list_train_net,
+                        data_list_val=data_list_val_net,
+                        training_ae=True,
+                        training_ts=False,
+                    )
+                else:
+                    objective_func_wrapped = partial(
+                        aerom.build_and_train,
+                        input_dict=input_dict,
+                        data_list_train=data_list_train_net,
+                        data_list_val=data_list_val_net,
+                        training_ae=False,
+                        training_ts=True,
+                    )
+            else:
+                objective_func_wrapped = partial(
+                    aerom.build_and_train,
+                    input_dict=input_dict,
+                    data_list_train=data_list_train_net,
+                    data_list_val=data_list_val_net,
+                    training_ae=True,
+                    training_ts=True,
+                )
 
+            # breakpoint()
             # find "best" model according to specified hyperparameter optimization algorithm
             trials = Trials()
             best = fmin(
@@ -124,19 +148,17 @@ def main():
 
             print("\nTRAINING SINGLE ARCHITECTURE\n")
 
-            # train networks separately
-            if input_dict["train_separate"]:
+            # train either autoencoder or time stepper
+            if input_dict["train_ae"] != input_dict["train_ts"]:
                 if input_dict["train_ae"]:
                     best = aerom.build_and_train(
                         aerom.param_space, input_dict, data_list_train_net, data_list_val_net, training_ae=True,
                     )
-                    write_param_space(aerom.param_space, model_dir, aerom.train_prefix, "best_params", net_suff)
-
-                if input_dict["train_ts"]:
+                else:
                     best = aerom.build_and_train(
                         aerom.param_space, input_dict, data_list_train_net, data_list_val_net, training_ts=True
                     )
-                    write_param_space(aerom.param_space, model_dir, aerom.train_prefix, "best_params", net_suff)
+                write_param_space(aerom.param_space, model_dir, aerom.train_prefix, "best_params", net_suff)
 
             # train networks together
             else:
@@ -146,7 +168,7 @@ def main():
                     data_list_train_net,
                     data_list_val_net,
                     training_ae=True,
-                    training_ts=True
+                    training_ts=True,
                 )
                 write_param_space(
                     aerom.param_space, model_dir, aerom.train_prefix, "best_params", net_suff,
@@ -156,8 +178,6 @@ def main():
         print("=================================================================")
         print("NETWORK TRAINING COMPLETE IN " + str(time_end_network - time_start_network) + " seconds")
         print("=================================================================")
-
-        
 
     time_end_full = time()
     print("=================================================================")
