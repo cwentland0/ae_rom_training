@@ -140,6 +140,11 @@ class GenericRecurrentAETS(AEROM):
             data_train_input = data_train_input[shuffle_idxs, ...]
             data_train_output = data_train_output[shuffle_idxs, ...]
 
+            # squeeze singleton dimensions
+            # TODO: might not always be applicable
+            data_train_output = np.squeeze(data_train_output, axis=1)
+            data_val_output = np.squeeze(data_val_output, axis=1)
+
         # set up autoencoder data
         else:
 
