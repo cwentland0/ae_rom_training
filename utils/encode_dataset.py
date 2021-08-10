@@ -9,12 +9,12 @@ import ae_rom_training.ml_library as ml
 mllib_name = "tfkeras"
 
 model_dir = (
-    "/home/chris/Research/PERFORM_runs/rstransa_2021/transient_flame_1024_unforced/FOM/data_proc/models/ae_baseline"
+    "/scratch/kdur_root/kdur/chriswen/1d_transient_flame_1024cells/forced/models/new_results/"
 )
-model_label = "primVars_samp10_vector_k20_actSwish_filt16-32-64_stride2_kern8_batch10"
+model_label = "amp_0p01_freq_100k/baseline_ae/centNone_normMinMax/k20/primVars_samp10_vector_k20_actSwish_filt16-32-64_stride2_kern8_batch10"
 
 data_dir = (
-    "/home/chris/Research/PERFORM_runs/rstransa_2021/transient_flame_1024_forced/data_proc/FOM/amp_0p01_freq_100k"
+    "/scratch/kdur_root/kdur/chriswen/1d_transient_flame_1024cells/forced/FOM/amp_0p01_freq_100k/freq_100000/unsteady_field_results"
 )
 data_files = ["sol_prim_FOM.npy"]
 
@@ -31,7 +31,7 @@ network_order = "NHWC"
 
 out_base = os.path.join(data_dir, "encodings", model_label)
 if not os.path.isdir(out_base):
-    os.mkdir(out_base)
+    os.makedirs(out_base)
 
 model_dir = os.path.join(model_dir, model_label)
 
@@ -63,9 +63,27 @@ for net_idx in range(num_networks):
     norm_sub_prof = np.load(norm_sub_file)
     norm_sub_prof_list.append(norm_sub_prof.copy())
 
+    not_ic = False
     for file_idx in range(num_datasets):
         cent_file = os.path.join(model_dir, "cent_prof_dataset" + str(file_idx) + suffix_list[net_idx] + ".npy")
-        cent_prof = np.load(cent_file)
+        try:
+            cent_prof = np.load(cent_file)
+        except FileNotFoundError as e:
+            if file_idx == 0:
+                not_ic = True
+                break
+            else:
+                print(e)
+                raise FileNotFoundError
+        cent_prof_list[net_idx].append(cent_prof.copy())
+    if not_ic:
+        cent_file = os.path.join(model_dir, "cent_prof" + suffix_list[net_idx] + ".npy")
+        try:
+            cent_prof = np.load(cent_file)
+        except FileNotFoundError as e:
+            print("Could not find IC centering file OR normal centering file")
+            print(e)
+            raise FileNotFoundError
         cent_prof_list[net_idx].append(cent_prof.copy())
 
 # get data and format
@@ -152,7 +170,6 @@ latent_vars_list = [[]] * num_networks
 for net_idx in range(num_networks):
 
     print("Encoding network " + str(net_idx + 1) + "/" + str(num_networks))
-
     # get encoder
     encoder_file = "encoder"
     for var_idx in var_network_idxs[net_idx]:

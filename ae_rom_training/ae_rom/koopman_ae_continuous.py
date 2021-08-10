@@ -8,7 +8,7 @@ from ae_rom_training.autoencoder.autoencoder import Autoencoder
 from ae_rom_training.time_stepper.koopman import Koopman
 
 
-class KoopmanAEPan2020(AEROM):
+class KoopmanAEContinuous(AEROM):
     """Autoencoder which learns discrete Koopman, via Otto and Rowley (2019)"""
 
     def __init__(self, net_idx, input_dict, mllib, network_suffix):

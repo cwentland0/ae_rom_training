@@ -131,15 +131,12 @@ def read_input_file(input_file):
 
     # path inputs
     input_dict["data_dir"] = input_dict_raw["data_dir"]
-    input_dict["data_encoded"] = catch_input(input_dict_raw, "data_encoded", False)
     input_dict["data_files_train"] = input_dict_raw["data_files_train"]
     input_dict["data_files_val"] = catch_list(input_dict_raw, "data_files_val", [None])
     input_dict["model_dir"] = os.path.join(input_dict_raw["model_dir"], input_dict_raw["model_label"])
-    input_dict["ae_dir"] = catch_input(input_dict_raw, "ae_dir", "")
+    input_dict["ae_label"] = catch_input(input_dict_raw, "ae_label", "")
     if not os.path.exists(input_dict["model_dir"]):
         os.makedirs(input_dict["model_dir"])
-    if input_dict["ae_dir"] is not None:
-        _, input_dict["ae_label"] = os.path.split(input_dict["ae_dir"])
 
     # data inputs
     input_dict["var_network_idxs"] = list(input_dict_raw["var_network_idxs"])
@@ -246,6 +243,12 @@ def get_vars_from_data(data_list, var_idxs):
 
 def get_train_val_data(input_dict):
 
+    # check whether to expect encoded data
+    if input_dict["train_ts"] and (not input_dict["train_ae"]):
+        data_encoded = True
+    else:
+        data_encoded = False
+
     # get training data set
     data_list_raw_train = agg_data_sets(
         input_dict["data_dir"],
@@ -254,7 +257,7 @@ def get_train_val_data(input_dict):
         input_dict["idx_end_list_train"],
         input_dict["idx_skip_list_train"],
         input_dict["data_order"],
-        encoded=input_dict["data_encoded"],
+        encoded=data_encoded,
         net_idxs=input_dict["var_network_idxs"],
         ae_label=input_dict["ae_label"],
     )
@@ -268,7 +271,7 @@ def get_train_val_data(input_dict):
             input_dict["idx_end_list_val"],
             input_dict["idx_skip_list_val"],
             input_dict["data_order_val"],
-            encoded=input_dict["data_encoded"],
+            encoded=data_encoded,
             net_idxs=input_dict["var_network_idxs"],
             ae_label=input_dict["ae_label"],
         )
@@ -284,7 +287,7 @@ def get_train_val_data(input_dict):
     for net_idx, var_idxs in enumerate(input_dict["var_network_idxs"]):
 
         # if data has already been encoded, they were already broken up by network
-        if input_dict["data_encoded"]:
+        if data_encoded:
             data_list_var_train_in = data_list_raw_train[net_idx]
             if data_list_raw_val is not None:
                 data_list_var_val_in = data_list_raw_val[net_idx]
@@ -328,7 +331,7 @@ def get_train_val_data(input_dict):
             squeeze_axis = -1
 
         # if training on encoded data, squeeze dummy spatial dimension
-        if input_dict["data_encoded"]:
+        if data_encoded:
             for idx, data_arr in enumerate(data_list_var_train):
                 data_list_var_train[idx] = np.squeeze(data_arr, axis=squeeze_axis)
             for idx, data_arr in enumerate(data_list_var_val):

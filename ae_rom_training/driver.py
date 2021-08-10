@@ -11,8 +11,8 @@ from ae_rom_training.constants import RANDOM_SEED
 from ae_rom_training.preproc_utils import catch_input, read_input_file, get_train_val_data
 from ae_rom_training.ml_library import get_ml_library
 from ae_rom_training.ae_rom.baseline_ae_rom import BaselineAEROM
-from ae_rom_training.ae_rom.koopman_ae_otto2019 import KoopmanAEOtto2019
-from ae_rom_training.ae_rom.koopman_ae_pan2020 import KoopmanAEPan2020
+from ae_rom_training.ae_rom.koopman_ae_discrete import KoopmanAEDiscrete
+from ae_rom_training.ae_rom.koopman_ae_continuous import KoopmanAEContinuous
 from ae_rom_training.ae_rom.generic_recurrent_ae_ts import GenericRecurrentAETS
 
 np.random.seed(RANDOM_SEED)  # seed NumPy RNG
@@ -57,12 +57,12 @@ def main():
     aerom_type = input_dict["aerom_type"]
     for net_idx in range(input_dict["num_networks"]):
         net_suff = input_dict["network_suffixes"][net_idx]
-        if aerom_type == "baseline":
+        if aerom_type == "baseline_ae":
             aerom_list.append(BaselineAEROM(net_idx, input_dict, mllib, net_suff))
-        elif aerom_type == "koopman_otto2019":
-            aerom_list.append(KoopmanAEOtto2019(net_idx, input_dict, mllib, network_suffix))
-        elif aerom_type == "koopman_pan2020":
-            aerom_list.append(KoopmanAEPan2020(net_idx, input_dict, mllib, network_suffix))
+        elif aerom_type == "koopman_discrete":
+            aerom_list.append(KoopmanAEDiscrete(net_idx, input_dict, mllib, network_suffix))
+        elif aerom_type == "koopman_continuous":
+            aerom_list.append(KoopmanAEContinuous(net_idx, input_dict, mllib, network_suffix))
         elif aerom_type == "generic_recurrent":
             aerom_list.append(GenericRecurrentAETS(net_idx, input_dict, mllib, network_suffix))
         else:

@@ -9,7 +9,7 @@ from ae_rom_training.autoencoder.baseline_ae import BaselineAE
 from ae_rom_training.time_stepper.koopman import Koopman
 
 
-class KoopmanAEOtto2019(AEROM):
+class KoopmanAEDiscrete(AEROM):
     """Autoencoder which learns discrete Koopman, via Otto and Rowley (2019)"""
 
     def __init__(self, net_idx, input_dict, mllib, network_suffix):
