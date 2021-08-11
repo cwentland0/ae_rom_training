@@ -111,7 +111,7 @@ class MLModel:
         conv_count, trans_conv_count = 0, 0
         dense_count = 0
         koopman_continuous_count = 0
-        lstm_count, tcn_count = 0, 0
+        lstm_count, gru_count, tcn_count = 0, 0, 0
         reshape_count, flatten_count = 0, 0
         self.num_addtl_layers = 0
         addtl_layer_idxs = []
@@ -244,6 +244,29 @@ class MLModel:
                     name="lstm_" + str(lstm_count),
                 )
                 lstm_count += 1
+
+            elif layer_type == "gru":
+                layer_output = self.mllib.get_gru_layer(
+                    layer_input,
+                    layer_dict["output_size"],
+                    layer_dict["return_sequences"],
+                    layer_dict["activation"],
+                    recurrent_activation=layer_dict["recurrent_activation"],
+                    use_bias=layer_dict["use_bias"],
+                    kern_reg=layer_dict["kern_reg"],
+                    kern_reg_val=layer_dict["kern_reg_val"],
+                    act_reg=layer_dict["act_reg"],
+                    act_reg_val=layer_dict["act_reg_val"],
+                    bias_reg=layer_dict["bias_reg"],
+                    bias_reg_val=layer_dict["bias_reg_val"],
+                    recurrent_reg=layer_dict["recurrent_reg"],
+                    recurrent_reg_val=layer_dict["recurrent_reg_val"],
+                    kern_init=layer_dict["kern_init"],
+                    bias_init=layer_dict["bias_init"],
+                    recurrent_init=layer_dict["recurrent_init"],
+                    name="gru_" + str(gru_count),
+                )
+                gru_count += 1
 
             elif layer_type == "tcn":
                 layer_output = self.mllib.get_tcn_layer(
