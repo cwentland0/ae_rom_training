@@ -56,9 +56,9 @@ def main():
     aerom_list = []
     aerom_type = input_dict["aerom_type"]
     for net_idx in range(input_dict["num_networks"]):
-        net_suff = input_dict["network_suffixes"][net_idx]
+        network_suffix = input_dict["network_suffixes"][net_idx]
         if aerom_type == "baseline_ae":
-            aerom_list.append(BaselineAEROM(net_idx, input_dict, mllib, net_suff))
+            aerom_list.append(BaselineAEROM(net_idx, input_dict, mllib, network_suffix))
         elif aerom_type == "koopman_discrete":
             aerom_list.append(KoopmanAEDiscrete(net_idx, input_dict, mllib, network_suffix))
         elif aerom_type == "koopman_continuous":
