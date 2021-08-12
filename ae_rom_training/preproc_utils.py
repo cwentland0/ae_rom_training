@@ -807,3 +807,12 @@ def get_shape_tuple(shape_var):
         return shape_var
     else:
         raise TypeError("Invalid shape input of type " + str(type(shape_var)))
+
+def seed_rng(mllib):
+    """Seeds NumPy random number generator and ML library random number generator.
+    
+    More or less resets RNG to a ground state, useful for ensuring model training is the same run to run.
+    """
+
+    np.random.seed(RANDOM_SEED)  # seed NumPy RNG
+    mllib.seed_rng()

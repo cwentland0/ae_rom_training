@@ -8,14 +8,12 @@ import numpy as np
 from hyperopt import fmin, Trials, space_eval
 
 from ae_rom_training.constants import RANDOM_SEED
-from ae_rom_training.preproc_utils import catch_input, read_input_file, get_train_val_data
+from ae_rom_training.preproc_utils import catch_input, read_input_file, get_train_val_data, seed_rng
 from ae_rom_training.ml_library import get_ml_library
 from ae_rom_training.ae_rom.baseline_ae_rom import BaselineAEROM
 from ae_rom_training.ae_rom.koopman_ae_discrete import KoopmanAEDiscrete
 from ae_rom_training.ae_rom.koopman_ae_continuous import KoopmanAEContinuous
 from ae_rom_training.ae_rom.generic_recurrent_ae_ts import GenericRecurrentAETS
-
-np.random.seed(RANDOM_SEED)  # seed NumPy RNG
 
 # TODO: detect if a component has no Hyperopt expressions, don't use Hyperopt
 # TODO: load trained autoencoder for separate training of time-stepper
@@ -47,6 +45,9 @@ def main():
     run_gpu = catch_input(input_dict, "run_gpu", False)
     mllib = get_ml_library(input_dict["mllib_name"], run_gpu)
 
+    # initial RNG seed
+    seed_rng(mllib)
+
     # get training and validation data
     data_list_train, data_list_val, split_idxs_list_train, split_idxs_list_val = get_train_val_data(input_dict)
 
@@ -76,6 +77,9 @@ def main():
         print("TRAINING NETWORK " + str(net_idx + 1) + "/" + str(input_dict["num_networks"]))
         print("=================================================================")
         time_start_network = time()
+
+        # reset RNG
+        seed_rng(mllib)
 
         net_suff = input_dict["network_suffixes"][net_idx]
         data_list_train_net = data_list_train[net_idx]

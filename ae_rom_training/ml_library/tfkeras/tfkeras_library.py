@@ -38,11 +38,11 @@ class TFKerasLibrary(MLLibrary):
 
     def __init__(self, run_gpu=False):
 
-        tf.random.set_seed(RANDOM_SEED)
         super().__init__(run_gpu)
 
-    def assemble_model(self):
-        pass
+    def seed_rng(self):
+        
+        tf.random.set_seed(RANDOM_SEED)
 
     def init_gpu(self, run_gpu):
 
