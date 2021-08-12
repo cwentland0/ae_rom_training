@@ -368,7 +368,7 @@ def agg_data_sets(
         data_dir = os.path.join(data_dir, "encodings", ae_label)
 
     if encoded:
-        data_raw = [[]] * len(net_idxs)
+        data_raw = [[] for _ in range(len(net_idxs))]
     else:
         data_raw = []
     for file_count, data_file in enumerate(data_loc_list):
@@ -376,12 +376,12 @@ def agg_data_sets(
         data_load = []
         # if encoded data, need data from each network
         if encoded:
-            data_file_encoded = data_file[:-4]  # strip .npy
+            data_name_encoded = data_file[:-4]  # strip .npy
             for var_idxs in net_idxs:
                 suffix = ""
                 for var_idx in var_idxs:
                     suffix += "_" + str(var_idx)
-                data_file_encoded += suffix + ".npy"
+                data_file_encoded = data_name_encoded + suffix + ".npy"
                 data_loc = os.path.join(data_dir, data_file_encoded)
                 data_load.append(np.load(data_loc))
 
@@ -392,7 +392,7 @@ def agg_data_sets(
 
         num_dims = data_load[0].ndim - 2  # excludes N and C dimensions
 
-        for data in data_load:
+        for data_idx, data in enumerate(data_load):
 
             # For now, everything goes to NCHW, will get transposed to NHWC right before training if requested
             if data_order != "NCHW":
@@ -452,9 +452,9 @@ def agg_data_sets(
 
             # aggregate all data sets
             # if encoded, data_raw is a list of lists, sublists correspond to latent variable datasets for each network
+            # data_idx could also be net_idx, since this iterates through the data for each network
             if encoded:
-                for net_idx in range(len(net_idxs)):
-                    data_raw[net_idx].append(data.copy())
+                data_raw[data_idx].append(data.copy())
             # if full state data, data_raw is a list, entries are np.ndarrays with state snapshots
             else:
                 data_raw.append(data.copy())
