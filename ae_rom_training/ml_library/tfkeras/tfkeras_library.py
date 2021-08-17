@@ -1,6 +1,7 @@
 import os
 
 import numpy as np
+from numpy import inf
 import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras import Input
@@ -673,6 +674,18 @@ class TFKerasLibrary(MLLibrary):
 
         metrics = ["loss", "val_loss"]
 
+        # early stopping
+        # TODO: this is only valid for val_loss that is expected to decrease with training
+        es = None
+        if isinstance(options["callbacks"], list):
+            for callback in options["callbacks"]:
+                if isinstance(callback, EarlyStopping):
+                    es = callback
+                    break
+            if es is not None:
+                es_epochs = 0
+                es_loss = inf
+
         # training loop
         for epoch in range(max_epochs):
             print("Epoch " + str(epoch + 1) + "/" + str(max_epochs))
@@ -696,6 +709,7 @@ class TFKerasLibrary(MLLibrary):
                         ae_rom,
                         continuous=continuous,
                         time_values=time_values_train_batch,
+                        eps=params["eps"],
                         **kwargs,
                     )
                     loss_train = loss_train_list[0]
@@ -705,7 +719,6 @@ class TFKerasLibrary(MLLibrary):
                 if verbose == 1:
                     progbar.update(num_samps, values=[("loss", loss_train.numpy()), ("val_loss", loss_val.numpy())])
 
-            # Compute validation loss
             loss_val_list = loss(
                 data_input_val, data_output_val, ae_rom, continuous=continuous, time_values=time_values_val, **kwargs,
             )
@@ -727,9 +740,45 @@ class TFKerasLibrary(MLLibrary):
                     loss_addtl_train_list[loss_idx][epoch] = loss_train_list[loss_idx + 1].numpy()
                     loss_addtl_val_list[loss_idx][epoch] = loss_val_list[loss_idx + 1].numpy()
 
-            # TODO: check for early stopping
+            # check for early stopping
+            if es is not None:
+                # validation loss has decreased
+                if loss_val.numpy() < es_loss:
 
-        return loss_train_hist, loss_val_hist, loss_addtl_train_list, loss_addtl_val_list
+                    es_epochs = 0
+                    es_loss = loss_val.numpy()
+                    best_encoder_weights = ae_rom.autoencoder.encoder.model_obj.get_weights()
+                    best_decoder_weights = ae_rom.autoencoder.decoder.model_obj.get_weights()
+                    # TODO: this can't handle continuous Koopman
+                    best_stepper_weights = ae_rom.time_stepper.stepper.model_obj.get_weights()
+
+                # validation loss has NOT decreased
+                else:
+                    es_epochs += 1
+
+                    # exceeded patience
+                    if es_epochs == es.patience:
+                        # restore weights
+                        if es.restore_best_weights:
+                            ae_rom.autoencoder.encoder.model_obj.set_weights(best_encoder_weights)
+                            ae_rom.autoencoder.decoder.model_obj.set_weights(best_decoder_weights)
+                            ae_rom.time_stepper.stepper.model_obj.set_weights(best_stepper_weights)
+                        
+                        # exit epoch loop
+                        break
+
+        # calculate final training and validation loss
+        loss_train_list = loss(
+            data_input_train, data_output_train, ae_rom, continuous=continuous, time_values=time_values_val, **kwargs,
+        )
+        loss_train = loss_train_list[0].numpy()
+        loss_val_list = loss(
+            data_input_val, data_output_val, ae_rom, continuous=continuous, time_values=time_values_val, **kwargs,
+        )
+        loss_val = loss_val_list[0].numpy()
+        
+
+        return loss_train, loss_val, loss_train_hist, loss_val_hist, loss_addtl_train_list, loss_addtl_val_list
 
     def calc_loss(self, model_obj, input_data, output_data):
 

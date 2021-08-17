@@ -168,7 +168,7 @@ class GenericRecurrentAETS(AEROM):
             self.time_stepper.stepper.model_obj,
         ]
 
-        loss_train_hist, loss_val_hist, loss_addtl_train_list, loss_addtl_val_list = self.mllib.train_model_custom(
+        loss_train, loss_val, loss_train_hist, loss_val_hist, loss_addtl_train_list, loss_addtl_val_list = self.mllib.train_model_custom(
             self,
             data_train_seqs,
             data_train_seqs,
@@ -186,8 +186,5 @@ class GenericRecurrentAETS(AEROM):
         self.loss_train_step = loss_addtl_train_list[1]
         self.loss_val_recon = loss_addtl_val_list[0]
         self.loss_val_step = loss_addtl_val_list[1]
-
-        loss_train = loss_train_hist[-1]
-        loss_val = loss_val_hist[-1]
 
         return loss_train, loss_val
