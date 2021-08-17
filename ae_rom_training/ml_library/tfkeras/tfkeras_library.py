@@ -41,7 +41,7 @@ class TFKerasLibrary(MLLibrary):
         super().__init__(run_gpu)
 
     def seed_rng(self):
-        
+
         tf.random.set_seed(RANDOM_SEED)
 
     def init_gpu(self, run_gpu):

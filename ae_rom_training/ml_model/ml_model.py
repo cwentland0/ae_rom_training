@@ -83,7 +83,9 @@ class MLModel:
             # if -1 is entered for input size, assume this is supposed to be equal to latent_dim
             # makes training automation a lot easier
             if param_type == "output_size":
-                params[input_key] = [input_dict["latent_dim"][self.net_idx] if x == -1 else x for x in params[input_key]]
+                params[input_key] = [
+                    input_dict["latent_dim"][self.net_idx] if x == -1 else x for x in params[input_key]
+                ]
 
         for layer_idx in range(self.num_layers):
             layer_dict = {}

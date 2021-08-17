@@ -710,6 +710,71 @@ def window(data: list, seq_length, pred_length=1, seq_step=1):
     return data_seqs, pred_seqs
 
 
+def sequencize(
+    data_list_train,
+    split_idxs_train,
+    data_list_val,
+    split_idxs_val,
+    seq_lookback,
+    seq_step,
+    pred_length=1,
+    hankelize_data=False,
+):
+
+    # need to unshuffle, make sequences, then separate sequences out again
+    # TODO: this doesn't work with separate validation sets
+    # put consecutive data back together again
+    data_list_full = []
+    for idx, data_train in enumerate(data_list_train):
+        data_val = data_list_val[idx]
+        num_snaps = data_train.shape[0] + data_val.shape[0]
+        split_idxs_train_arr = split_idxs_train[idx]
+        split_idxs_val_arr = split_idxs_val[idx]
+        data_full = np.zeros((num_snaps,) + data_train.shape[1:], dtype=data_train.dtype)
+        data_full[split_idxs_train_arr, ...] = data_train.copy()
+        data_full[split_idxs_val_arr, ...] = data_val.copy()
+        data_list_full.append(data_full.copy())
+
+    # window data, making inputs and labels
+    if hankelize_data:
+        data_seqs_in = hankelize(data_list_full, seq_lookback + pred_length, seq_step)
+    else:
+        data_seqs_in, data_seqs_out = window(data_list_full, seq_lookback, pred_length=pred_length, seq_step=seq_step)
+
+    # redistribute training and validation data
+    data_list_train_seqs = []
+    data_list_val_seqs = []
+    data_list_train_seqs_pred = []
+    data_list_val_seqs_pred = []
+    for idx, data_seqs in enumerate(data_seqs_in):
+
+        # need to exclude 0:seq_lookback, subtract seq_lookback to get new sorting indices
+        # NOTE: assume_unique maintains shuffle
+        idxs_train = np.setdiff1d(split_idxs_train[idx], np.arange(0, seq_lookback), assume_unique=True) - seq_lookback
+        idxs_val = np.setdiff1d(split_idxs_val[idx], np.arange(0, seq_lookback), assume_unique=True) - seq_lookback
+        data_list_train_seqs.append(data_seqs[idxs_train, ...])
+        data_list_val_seqs.append(data_seqs[idxs_val, ...])
+
+        # make separate prediction matrix if windowing data
+        if not hankelize_data:
+            data_seqs_pred = data_seqs_out[idx]
+            data_list_train_seqs_pred.append(data_seqs_pred[idxs_train, ...])
+            data_list_val_seqs_pred.append(data_seqs_pred[idxs_val, ...])
+
+    # concatenate data
+    data_train_input = np.concatenate(data_list_train_seqs, axis=0)
+    data_val_input = np.concatenate(data_list_val_seqs, axis=0)
+
+    if not hankelize_data:
+        data_train_output = np.concatenate(data_list_train_seqs_pred, axis=0)
+        data_val_output = np.concatenate(data_list_val_seqs_pred, axis=0)
+    else:
+        data_train_output = None
+        data_val_output = None
+
+    return data_train_input, data_train_output, data_val_input, data_val_output
+
+
 def norm_switch(data: list, norm_type, axes):
     """Compute normalization profile
 
@@ -807,6 +872,7 @@ def get_shape_tuple(shape_var):
         return shape_var
     else:
         raise TypeError("Invalid shape input of type " + str(type(shape_var)))
+
 
 def seed_rng(mllib):
     """Seeds NumPy random number generator and ML library random number generator.

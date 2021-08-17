@@ -1,3 +1,5 @@
+from time import time
+
 import tensorflow as tf
 from tensorflow.python.keras.losses import MeanSquaredError
 
@@ -20,6 +22,7 @@ def ae_ts_combined_error(data_seq, data_seq_ignore, ae_rom, lookback=1, continuo
     """Simple loss for prediction and reconstruction error of combined AE/TS."""
 
     seq_length = data_seq.shape[1]
+    data_feat_shape = tuple(data_seq.shape[2:])
     if continuous:
         assert lookback == 1, "lookback must be equal to 1 for continuous prediction"
         assert time_values is not None, "If making continuous predictions, must provide time_values"
@@ -33,29 +36,24 @@ def ae_ts_combined_error(data_seq, data_seq_ignore, ae_rom, lookback=1, continuo
     loss_recon = 0.0
     loss_step = 0.0
 
-    # lookback window encoding
-    for seq in range(0, lookback):
-        latent_vars_encode = ae_rom.autoencoder.encoder.model_obj(data_seq[:, seq, ...])
-        sol_decode = ae_rom.autoencoder.decoder.model_obj(latent_vars_encode)
-
-        # initial reconstruction loss (no advancing with time stepper)
-        if seq == 0:
-            sol_seq = tf.cast(data_seq, sol_decode.dtype)
-        loss_recon += tf.math.reduce_mean(tf.math.squared_difference(sol_decode, sol_seq[:, seq, ...]))
-
-        if lookback > 1:
-            latent_vars_encode = tf.expand_dims(latent_vars_encode, axis=1)
-
-        if seq == 0:
-            latent_vars_lookback = tf.identity(latent_vars_encode)
-        else:
-            latent_vars_lookback = tf.concat([latent_vars_lookback, latent_vars_encode], axis=1)
+    # encode and decode everything in a big batch
+    data_seq_flat = tf.reshape(data_seq, (-1,) + data_feat_shape)
+    latent_vars_encode_flat = ae_rom.autoencoder.encoder.model_obj(data_seq_flat)
+    latent_vars_feat_shape = tuple(latent_vars_encode_flat.shape[1:])
+    latent_vars_encode = tf.reshape(latent_vars_encode_flat, (-1, seq_length,) + latent_vars_feat_shape)
+    latent_vars_lookback = latent_vars_encode[:, :lookback, ...]
+    latent_vars_lookback_flat = tf.reshape(latent_vars_lookback, (-1,) + latent_vars_feat_shape)
+    sol_decode_flat = ae_rom.autoencoder.decoder.model_obj(latent_vars_lookback_flat)
+    sol_decode = tf.reshape(sol_decode_flat, (-1, lookback,) + data_feat_shape)
+    sol_seq = tf.cast(data_seq, sol_decode.dtype)
+    # mean_axes = [tf.TensorShape([0]) + tf.range(2, 2 + len(data_feat_shape))]
+    mean_axes = [0] + [i for i in range(2, 2 + len(data_feat_shape))]
+    loss_recon = tf.math.reduce_sum(
+        tf.math.reduce_mean(tf.math.squared_difference(sol_decode, sol_seq[:, :lookback, ...]), axis=mean_axes)
+    )
 
     # prediction
     for seq in range(lookback, seq_length):
-
-        # encode solution
-        latent_vars_encode = ae_rom.autoencoder.encoder.model_obj(sol_seq[:, seq, ...])
 
         # make time stepper prediction
         if continuous:
@@ -69,7 +67,7 @@ def ae_ts_combined_error(data_seq, data_seq_ignore, ae_rom, lookback=1, continuo
         sol_pred = ae_rom.autoencoder.decoder.model_obj(latent_vars_pred)
 
         loss_recon += tf.math.reduce_mean(tf.math.squared_difference(sol_pred, sol_seq[:, seq, ...]))
-        loss_step += tf.math.reduce_mean(tf.math.squared_difference(latent_vars_pred, latent_vars_encode))
+        loss_step += tf.math.reduce_mean(tf.math.squared_difference(latent_vars_pred, latent_vars_encode[:, seq, ...]))
 
         # update lookback window
         # don't update for continuous, as latent_vars_loopback should stay equal to the initial sequence state
@@ -77,11 +75,12 @@ def ae_ts_combined_error(data_seq, data_seq_ignore, ae_rom, lookback=1, continuo
             if lookback == 1:
                 latent_vars_lookback = latent_vars_pred
             else:
-                latent_vars_lookback = tf.concat(
-                    [latent_vars_lookback[:, 1:, ...], tf.expand_dims(latent_vars_pred, axis=1)], axis=1,
-                )
+                if seq < (seq_length - 1):
+                    latent_vars_lookback = tf.concat(
+                        [latent_vars_lookback[:, 1:, ...], tf.expand_dims(latent_vars_pred, axis=1)], axis=1,
+                    )
 
     loss_recon /= seq_length
-    loss_step /= seq_length - lookback + 1
+    loss_step /= seq_length - lookback
 
     return [loss_recon + loss_step, loss_recon, loss_step]
