@@ -16,7 +16,6 @@ from ae_rom_training.ae_rom.koopman_ae_continuous import KoopmanAEContinuous
 from ae_rom_training.ae_rom.generic_recurrent_ae_ts import GenericRecurrentAETS
 
 # TODO: detect if a component has no Hyperopt expressions, don't use Hyperopt
-# TODO: load trained autoencoder for separate training of time-stepper
 # TODO: define layer precision
 # TODO: dry run option to display ALL layer parameters so user can verify before training
 

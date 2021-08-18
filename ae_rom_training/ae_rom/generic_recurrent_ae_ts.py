@@ -21,9 +21,9 @@ class GenericRecurrentAETS(AEROM):
         # get autoencoder
         if input_dict["train_ae"]:
             if input_dict["train_ts"]:
-                self.autoencoder = BaselineAE(net_idx, mllib)
-            else:
                 self.autoencoder = Autoencoder(net_idx, mllib)
+            else:
+                self.autoencoder = BaselineAE(net_idx, mllib)
         else:
             self.autoencoder = None
 
@@ -98,6 +98,7 @@ class GenericRecurrentAETS(AEROM):
                 seq_lookback,
                 seq_step,
                 pred_length,
+                separate_val=input_dict["separate_val"],
             )
 
             shuffle_idxs = np.random.permutation(np.arange(data_train_input.shape[0]))

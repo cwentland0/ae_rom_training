@@ -1,3 +1,4 @@
+import enum
 import re
 import os
 from math import ceil
@@ -5,6 +6,7 @@ from math import ceil
 import numpy as np
 from sklearn.model_selection import train_test_split
 from hyperopt import tpe, rand
+from tensorflow.python.types.core import Value
 
 from ae_rom_training.constants import RANDOM_SEED
 
@@ -141,16 +143,11 @@ def read_input_file(input_file):
     # data inputs
     input_dict["var_network_idxs"] = list(input_dict_raw["var_network_idxs"])
     input_dict["num_networks"] = len(input_dict["var_network_idxs"])
-    input_dict["idx_start_list_train"] = catch_input(input_dict_raw, "idx_start_list_train", [0])
-    input_dict["idx_end_list_train"] = catch_input(input_dict_raw, "idx_end_list_train", [None])
-    input_dict["idx_skip_list_train"] = catch_input(input_dict_raw, "idx_skip_list_train", [None])
+    input_dict["idx_start_list_train"] = input_dict_raw["idx_start_list_train"]
+    input_dict["idx_end_list_train"] = input_dict_raw["idx_end_list_train"]
+    input_dict["idx_skip_list_train"] = input_dict_raw["idx_skip_list_train"]
     input_dict["time_init_list_train"] = catch_input(input_dict_raw, "time_init_list_train", [None])
     input_dict["dt_list_train"] = catch_input(input_dict_raw, "dt_list_train", [None])
-    input_dict["idx_start_list_val"] = catch_input(input_dict_raw, "idx_start_list_val", [0])
-    input_dict["idx_end_list_val"] = catch_input(input_dict_raw, "idx_end_list_val", [None])
-    input_dict["idx_skip_list_val"] = catch_input(input_dict_raw, "idx_skip_list_val", [None])
-    input_dict["time_init_list_val"] = catch_input(input_dict_raw, "time_init_list_val", [None])
-    input_dict["dt_list_val"] = catch_input(input_dict_raw, "dt_list_val", [None])
     input_dict["dt_nondim"] = catch_input(input_dict_raw, "dt_nondim", 1.0e-6)  # time non-dimensionalization
     input_dict["data_order"] = input_dict_raw["data_order"]
     input_dict["network_order"] = catch_input(input_dict_raw, "network_order", "NHWC")
@@ -172,6 +169,12 @@ def read_input_file(input_file):
         input_dict["dt_list_train"] *= num_datasets_train
 
     if input_dict["data_files_val"][0] is not None:
+        input_dict["idx_start_list_val"] = input_dict_raw["idx_start_list_val"]
+        input_dict["idx_end_list_val"] = input_dict_raw["idx_end_list_val"]
+        input_dict["idx_skip_list_val"] = input_dict_raw["idx_skip_list_val"]
+        input_dict["time_init_list_val"] = catch_input(input_dict_raw, "time_init_list_val", [None])
+        input_dict["dt_list_val"] = catch_input(input_dict_raw, "dt_list_val", [None])
+
         num_datasets_val = len(input_dict["data_files_val"])
         if len(input_dict["idx_start_list_val"]) == 1:
             input_dict["idx_start_list_val"] *= num_datasets_val
@@ -270,13 +273,16 @@ def get_train_val_data(input_dict):
             input_dict["idx_start_list_val"],
             input_dict["idx_end_list_val"],
             input_dict["idx_skip_list_val"],
-            input_dict["data_order_val"],
+            input_dict["data_order"],
             encoded=data_encoded,
             net_idxs=input_dict["var_network_idxs"],
             ae_label=input_dict["ae_label"],
         )
+        input_dict["separate_val"] = True
     else:
         data_list_raw_val = None
+        input_dict["separate_val"] = False
+
 
     # TODO: training/validation split is different for each network, might not be the more rigorous?
     # might be easier to get a fixed index shuffle, apply to all network
@@ -476,20 +482,21 @@ def preproc_raw_data(
     data_list_train, data_list_val = [], []
     split_idxs_list_train, split_idxs_list_val = [], []
 
+    
+    # if centering by initial condition, center training data here
+    if centering_scheme == "init_cond":
+        data_list_train_var_cent, _ = center_data_set(
+            data_list_train_var, centering_scheme, model_dir, network_suffix, save_cent=True
+        )
+    else:
+        data_list_train_var_cent = data_list_train_var
+
     # make train/val split from given training data
     if data_list_val_var is None:
 
-        # if centering by initial condition, center here
-        if centering_scheme == "init_cond":
-            data_list_train_var_cent, _ = center_data_set(
-                data_list_train_var, centering_scheme, model_dir, network_suffix, save_cent=True
-            )
-        else:
-            data_list_train_var_cent = data_list_train_var
-
-        # concatenate samples after centering
+        # split, maintain indices
         for dataset_num, data_arr in enumerate(data_list_train_var_cent):
-            data_train, data_val, split_idxs_train, split_idxs_val = split_data_set(data_arr, split_scheme, val_perc)
+            data_train, data_val, split_idxs_train, split_idxs_val = split_data_set(data_arr, split_scheme, val_perc=val_perc)
             data_list_train.append(data_train)
             data_list_val.append(data_val)
             split_idxs_list_train.append(split_idxs_train)
@@ -497,28 +504,21 @@ def preproc_raw_data(
 
     # training/validation split given by files
     else:
-        # aggregate training samples after centering
-        # TODO: time values
-        raise ValueError("This section is totally incorrect, fix TBA")
-        for dataset_num, data_arr in enumerate(data_list_train_var):
-            data_in_train = center_data_set(data_arr, centering_scheme, model_dir, network_suffix, save_cent=True)
-            if dataset_num == 0:
-                data_train = data_in_train.copy()
-            else:
-                data_train = np.append(data_train, data_in_train, axis=0)
-        # shuffle training data to avoid temporal/dataset bias (shuffles along FIRST axis)
-        # TODO: figure out a wa
-        split_idxs_train = np.random.permutation(data_train.train[0])
-        data_train = [split_idxs_train, ...]
+        
+        # no real splitting of training set, just shuffling
+        for dataset_num, data_arr in enumerate(data_list_train_var_cent):
+            data_train, _, split_idxs_train, _ = split_data_set(data_arr, split_scheme, val_perc=0.0)
+            data_list_train.append(data_train)
+            split_idxs_list_train.append(split_idxs_train)
 
-        # aggregate validation samples after sampling
-        # don't need to shuffle validation data
-        for dataset_num, data_arr in enumerate(data_list_val_var):
-            data_in_val = center_data_set(data_arr, centering_scheme, model_dir, network_suffix, save_cent=False)
-            if dataset_num == 0:
-                data_val = data_in_val.copy()
-            else:
-                data_val = np.append(data_val, data_in_val, axis=0)
+        # center validation data, but don't need to shuffle
+        if centering_scheme == "init_cond":
+            data_list_val, _ = center_data_set(
+                data_list_val_var, centering_scheme, model_dir, network_suffix, save_cent=True, val=True,
+            )
+        else:
+            data_list_val = data_list_val_var
+        split_idxs_list_val = [np.arange(data_arr.shape[0]) for data_arr in data_list_val]
 
     # if not centering by initial condition, center here
     if centering_scheme != "init_cond":
@@ -584,7 +584,7 @@ def center_switch(data: list, cent_type):
     return cent_prof
 
 
-def center_data_set(data: list, cent_type, model_dir, network_suffix, cent_prof=None, save_cent=False):
+def center_data_set(data: list, cent_type, model_dir, network_suffix, cent_prof=None, save_cent=False, val=False):
     """Center data set about some profile.
 
     data is a list of data arrays assumed to be in NCHW format.
@@ -604,17 +604,23 @@ def center_data_set(data: list, cent_type, model_dir, network_suffix, cent_prof=
         if cent_type == "init_cond":
             for idx, prof in enumerate(cent_prof):
                 cent_prof_out = np.squeeze(prof, axis=0)
+                out_name = "cent_prof_dataset" + str(idx)
+                if val:
+                    out_name += "_val"
+                out_name += network_suffix + ".npy"
                 np.save(
-                    os.path.join(model_dir, "cent_prof_dataset" + str(idx) + network_suffix + ".npy"), cent_prof_out
+                    os.path.join(model_dir, out_name), cent_prof_out
                 )
         else:
+            if val:
+                raise ValueError("Validation set shouldn't be setting out it's own centering profile if not init_cond")
             cent_prof_out = np.squeeze(cent_prof, axis=0)
             np.save(os.path.join(model_dir, "cent_prof" + network_suffix + ".npy"), cent_prof_out)
 
     return data, cent_prof
 
 
-def split_data_set(data, split_type, val_perc):
+def split_data_set(data, split_type, val_perc=0.0):
     """Split dataset into training and validation sets.
 
     data is a NumPy array here.
@@ -622,12 +628,20 @@ def split_data_set(data, split_type, val_perc):
     """
 
     if split_type == "random":
-        indices = np.arange(data.shape[0])
-        data_train, data_val, idxs_train, idxs_val = train_test_split(
-            data, indices, test_size=val_perc, random_state=RANDOM_SEED
-        )
+        if val_perc == 0.0:
+            idxs_train = np.random.permutation(data.shape[0])
+            data_train = data[idxs_train, ...]
+            data_val = None
+            idxs_val = None
+        else:
+            indices = np.arange(data.shape[0])
+            data_train, data_val, idxs_train, idxs_val = train_test_split(
+                data, indices, test_size=val_perc, random_state=RANDOM_SEED
+            )
 
     elif split_type == "series_random":
+        if val_perc == 0.0:
+            raise ValueError("series_random got val_perc = 0.0")
         train_tresh = int(data.shape[0] * (1.0 - val_perc))
         data_train = data[:train_tresh, ...]
         data_val = data[train_tresh:, ...]
@@ -719,27 +733,41 @@ def sequencize(
     seq_step,
     pred_length=1,
     hankelize_data=False,
+    separate_val=False,
 ):
 
     # need to unshuffle, make sequences, then separate sequences out again
-    # TODO: this doesn't work with separate validation sets
     # put consecutive data back together again
     data_list_full = []
     for idx, data_train in enumerate(data_list_train):
-        data_val = data_list_val[idx]
-        num_snaps = data_train.shape[0] + data_val.shape[0]
+        
         split_idxs_train_arr = split_idxs_train[idx]
-        split_idxs_val_arr = split_idxs_val[idx]
-        data_full = np.zeros((num_snaps,) + data_train.shape[1:], dtype=data_train.dtype)
-        data_full[split_idxs_train_arr, ...] = data_train.copy()
-        data_full[split_idxs_val_arr, ...] = data_val.copy()
-        data_list_full.append(data_full.copy())
+        
+        # validation set should NOT have been shuffled, don't need to deal with it
+        if separate_val:
+            data_full = np.zeros(data_train.shape, dtype=data_train.dtype)
+            data_full[split_idxs_train_arr, ...] = data_train.copy()
+            data_list_full.append(data_full.copy())
+
+        # input data was split, shuffled
+        else:
+            split_idxs_val_arr = split_idxs_val[idx]
+            data_val = data_list_val[idx]
+            num_snaps = data_train.shape[0] + data_val.shape[0]
+            data_full = np.zeros((num_snaps,) + data_train.shape[1:], dtype=data_train.dtype)
+            data_full[split_idxs_train_arr, ...] = data_train.copy()
+            data_full[split_idxs_val_arr, ...] = data_val.copy()
+            data_list_full.append(data_full.copy())
 
     # window data, making inputs and labels
     if hankelize_data:
         data_seqs_in = hankelize(data_list_full, seq_lookback + pred_length, seq_step)
+        if separate_val:
+            data_seqs_in_val = hankelize(data_list_val, seq_lookback + pred_length, seq_step)
     else:
         data_seqs_in, data_seqs_out = window(data_list_full, seq_lookback, pred_length=pred_length, seq_step=seq_step)
+        if separate_val:
+            data_seqs_in_val, data_seqs_out_val = window(data_list_val, seq_lookback, pred_length=pred_length, seq_step=seq_step)
 
     # redistribute training and validation data
     data_list_train_seqs = []
@@ -751,15 +779,24 @@ def sequencize(
         # need to exclude 0:seq_lookback, subtract seq_lookback to get new sorting indices
         # NOTE: assume_unique maintains shuffle
         idxs_train = np.setdiff1d(split_idxs_train[idx], np.arange(0, seq_lookback), assume_unique=True) - seq_lookback
-        idxs_val = np.setdiff1d(split_idxs_val[idx], np.arange(0, seq_lookback), assume_unique=True) - seq_lookback
         data_list_train_seqs.append(data_seqs[idxs_train, ...])
-        data_list_val_seqs.append(data_seqs[idxs_val, ...])
+
+        if not separate_val:
+            idxs_val = np.setdiff1d(split_idxs_val[idx], np.arange(0, seq_lookback), assume_unique=True) - seq_lookback
+            data_list_val_seqs.append(data_seqs[idxs_val, ...])
 
         # make separate prediction matrix if windowing data
         if not hankelize_data:
             data_seqs_pred = data_seqs_out[idx]
             data_list_train_seqs_pred.append(data_seqs_pred[idxs_train, ...])
-            data_list_val_seqs_pred.append(data_seqs_pred[idxs_val, ...])
+            if not separate_val:
+                data_list_val_seqs_pred.append(data_seqs_pred[idxs_val, ...])
+
+    # again, validation set should never have been sorted in the first place if using separate validation sets
+    if separate_val:
+        data_list_val_seqs = data_seqs_in_val
+        if not hankelize_data:
+            data_list_val_seqs_pred = data_seqs_out_val
 
     # concatenate data
     data_train_input = np.concatenate(data_list_train_seqs, axis=0)
