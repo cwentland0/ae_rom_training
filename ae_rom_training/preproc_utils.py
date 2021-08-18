@@ -186,12 +186,16 @@ def read_input_file(input_file):
             input_dict["time_init_list_val"] *= num_datasets_val
         if len(input_dict["dt_list_val"]) == 1:
             input_dict["dt_list_val"] *= num_datasets_val
+    
+        input_dict["val_perc"] = None
+
+    else:
+        input_dict["val_perc"] = input_dict_raw["val_perc"]
 
     # data preprocessing
     input_dict["split_scheme"] = input_dict_raw["split_scheme"]
     input_dict["centering_scheme"] = input_dict_raw["centering_scheme"]
     input_dict["normal_scheme"] = input_dict_raw["normal_scheme"]
-    input_dict["val_perc"] = input_dict_raw["val_perc"]
 
     # global parameters
     input_dict["aerom_type"] = input_dict_raw["aerom_type"]
@@ -476,7 +480,7 @@ def preproc_raw_data(
     model_dir,
     network_suffix,
     data_list_val_var=None,
-    val_perc=0.0,
+    val_perc=None,
 ):
 
     data_list_train, data_list_val = [], []
@@ -507,7 +511,7 @@ def preproc_raw_data(
         
         # no real splitting of training set, just shuffling
         for dataset_num, data_arr in enumerate(data_list_train_var_cent):
-            data_train, _, split_idxs_train, _ = split_data_set(data_arr, split_scheme, val_perc=0.0)
+            data_train, _, split_idxs_train, _ = split_data_set(data_arr, split_scheme, val_perc=None)
             data_list_train.append(data_train)
             split_idxs_list_train.append(split_idxs_train)
 
@@ -620,7 +624,7 @@ def center_data_set(data: list, cent_type, model_dir, network_suffix, cent_prof=
     return data, cent_prof
 
 
-def split_data_set(data, split_type, val_perc=0.0):
+def split_data_set(data, split_type, val_perc=None):
     """Split dataset into training and validation sets.
 
     data is a NumPy array here.
@@ -628,7 +632,7 @@ def split_data_set(data, split_type, val_perc=0.0):
     """
 
     if split_type == "random":
-        if val_perc == 0.0:
+        if val_perc is None:
             idxs_train = np.random.permutation(data.shape[0])
             data_train = data[idxs_train, ...]
             data_val = None
@@ -640,8 +644,8 @@ def split_data_set(data, split_type, val_perc=0.0):
             )
 
     elif split_type == "series_random":
-        if val_perc == 0.0:
-            raise ValueError("series_random got val_perc = 0.0")
+        if val_perc is None:
+            raise ValueError("series_random got val_perc = None")
         train_tresh = int(data.shape[0] * (1.0 - val_perc))
         data_train = data[:train_tresh, ...]
         data_val = data[train_tresh:, ...]
