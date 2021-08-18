@@ -4,6 +4,7 @@ import os
 # Tensorflow-Keras
 TFKERAS_IMPORT_SUCCESS = True
 try:
+    import setGPU
     os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # don't print all the TensorFlow warnings
     import tensorflow as tf
 except ImportError:

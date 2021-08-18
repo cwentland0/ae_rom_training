@@ -726,6 +726,7 @@ class TFKerasLibrary(MLLibrary):
             progbar.update(num_samps, values=[("loss", loss_train.numpy()), ("val_loss", loss_val.numpy())])
 
             # store total loss history
+            # NOTE: training loss is only for last batch, way too expensive to re-evaluate entire training set
             loss_train_hist[epoch] = loss_train.numpy()
             loss_val_hist[epoch] = loss_val.numpy()
 
@@ -764,6 +765,13 @@ class TFKerasLibrary(MLLibrary):
                             ae_rom.autoencoder.decoder.model_obj.set_weights(best_decoder_weights)
                             ae_rom.time_stepper.stepper.model_obj.set_weights(best_stepper_weights)
                         
+                        # truncate loss histories
+                        loss_train_hist = loss_train_hist[:epoch]
+                        loss_val_hist = loss_val_hist[:epoch]
+                        for loss_idx in range(len(loss_train_list) - 1):
+                            loss_addtl_train_list[loss_idx] = loss_addtl_train_list[loss_idx][:epoch]
+                            loss_addtl_val_list[loss_idx] = loss_addtl_val_list[loss_idx][:epoch]
+
                         # exit epoch loop
                         break
 
@@ -776,7 +784,6 @@ class TFKerasLibrary(MLLibrary):
             data_input_val, data_output_val, ae_rom, continuous=continuous, time_values=time_values_val, **kwargs,
         )
         loss_val = loss_val_list[0].numpy()
-        
 
         return loss_train, loss_val, loss_train_hist, loss_val_hist, loss_addtl_train_list, loss_addtl_val_list
 
