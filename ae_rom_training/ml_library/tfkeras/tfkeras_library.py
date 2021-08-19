@@ -9,6 +9,8 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.layers import Conv1D, Conv2D, Conv3D
 from tensorflow.keras.layers import Conv1DTranspose, Conv2DTranspose, Conv3DTranspose
 from tensorflow.keras.layers import LSTM, GRU
+from tensorflow.keras.layers import Dropout
+from tensorflow.keras.layers import BatchNormalization, LayerNormalization
 from tensorflow.keras.layers import Flatten, Reshape
 from tensorflow.keras.regularizers import l1, l2
 from tensorflow.keras.optimizers import Adam
@@ -433,6 +435,83 @@ class TFKerasLibrary(MLLibrary):
         )(layer_input)
 
         return layer_output
+
+    def get_dropout_layer(self, layer_input, dropout_rate, name=None):
+
+        output_layer = Dropout(dropout_rate, seed=RANDOM_SEED, name=name)(layer_input)
+        return output_layer
+
+    def get_batchnorm_layer(self, layer_input, network_order, name=None):
+
+        input_rank = len(layer_input.shape) - 1  # exclude batch dimension
+        input_name = layer_input._name
+        if (
+            (input_name[:6] in ["conv1d", "conv2d", "conv3d"])
+            or (input_name[:11] in ["transconv1d", "transconv2d", "transconv3d"])
+        ):
+            if network_order == "NCHW":
+                axis = 1
+            elif network_order == "NHWC":
+                axis = -1
+            else:
+                raise ValueError("Invalid network_order: " + str(network_order))
+        elif input_name[:5] == "dense":
+            axis = 1
+        elif (input_name[:7] in ["dropout", "reshape"]):
+            # definitely not appropriate here, oh well
+            if input_rank == 1:
+                axis = 1
+            elif input_rank > 1:
+                if network_order == "NCHW":
+                    axis = 1
+                elif network_order == "NHWC":
+                    axis = -1
+                else:
+                    raise ValueError("Invalid network_order: " + str(network_order))
+            else:
+                raise ValueError("Input to batchnorm rank is non-positive?")
+        else:
+            raise ValueError("Failed to place batchnorm after unexpected layer: " + input_name)
+
+        # TODO: add other options if it becomes relevant
+        output_layer = BatchNormalization(axis=axis, name=name)(layer_input)
+        return output_layer
+
+    def get_layernorm_layer(self, layer_input, network_order, name=None):
+
+        input_rank = len(layer_input.shape) - 1  # exclude batch dimension
+        input_name = layer_input._name
+        if (
+            (input_name[:6] in ["conv1d", "conv2d", "conv3d"])
+            or (input_name[:11] in ["transconv1d", "transconv2d", "transconv3d"])
+        ):
+            if network_order == "NCHW":
+                axis = 1
+            elif network_order == "NHWC":
+                axis = -1
+            else:
+                raise ValueError("Invalid network_order: " + str(network_order))
+        elif input_name[:5] == "dense":
+            axis = 1
+        elif (input_name[:7] in ["dropout", "reshape"]):
+            # definitely not appropriate here, oh well
+            if input_rank == 1:
+                axis = 1
+            elif input_rank > 1:
+                if network_order == "NCHW":
+                    axis = 1
+                elif network_order == "NHWC":
+                    axis = -1
+                else:
+                    raise ValueError("Invalid network_order: " + str(network_order))
+            else:
+                raise ValueError("Input to batchnorm rank is non-positive?")
+        else:
+            raise ValueError("Failed to place batchnorm after unexpected layer: " + input_name)
+
+        # TODO: add other options if it becomes relevant
+        output_layer = LayerNormalization(axis=axis, name=name)(layer_input)
+        return output_layer
 
     def get_reshape_layer(self, layer_input, target_shape, name=None):
         """"Implement tensor input reshape."""

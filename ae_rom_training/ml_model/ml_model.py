@@ -87,6 +87,11 @@ class MLModel:
                     input_dict["latent_dim"][self.net_idx] if x == -1 else x for x in params[input_key]
                 ]
 
+            if param_type == "num_filters":
+                params[input_key] = [
+                    input_dict["num_vars"][self.net_idx] if x == -1 else x for x in params[input_key]
+                ]
+
         for layer_idx in range(self.num_layers):
             layer_dict = {}
             for input_key in self.input_keys:
@@ -114,6 +119,8 @@ class MLModel:
         dense_count = 0
         koopman_continuous_count = 0
         lstm_count, gru_count, tcn_count = 0, 0, 0
+        dropout_count = 0
+        batchnorm_count, layernorm_count = 0, 0
         reshape_count, flatten_count = 0, 0
         self.num_addtl_layers = 0
         addtl_layer_idxs = []
@@ -208,7 +215,7 @@ class MLModel:
                     flatten_count += 1
 
             # custom continuous Koopman operator layer
-            # requires and extra input layer for input time step
+            # requires an extra input layer for input time step
             elif layer_type == "koopman_continuous":
                 layer_output = self.mllib.get_continuous_koopman_layer(
                     layer_input,
@@ -283,6 +290,27 @@ class MLModel:
                     name="tcn_" + str(tcn_count),
                 )
                 tcn_count += 1
+
+            # dropout layer
+            elif layer_type == "dropout":
+                layer_output = self.mllib.get_dropout_layer(
+                    layer_input, layer_dict["dropout_rate"], name="dropout_" + str(dropout_count),
+                )
+                dropout_count += 1
+
+            # batch norm layer
+            elif layer_type == "batchnorm":
+                layer_output = self.mllib.get_batchnorm_layer(
+                    layer_input, input_dict["network_order"], name="batchnorm_" + str(batchnorm_count),
+                )
+                batchnorm_count += 1
+
+            # layer norm layer
+            elif layer_type == "layernorm":
+                layer_output = self.mllib.get_layernorm_layer(
+                    layer_input, input_dict["network_order"], name="layernorm_" + str(layernorm_count),
+                )
+                layernorm_count += 1
 
             # reshape layer
             elif layer_type == "reshape":

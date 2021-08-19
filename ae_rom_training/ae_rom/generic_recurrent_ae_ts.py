@@ -82,7 +82,7 @@ class GenericRecurrentAETS(AEROM):
 
         Here, data_list_train, data_list_val contain the standardized, encoded latent variables
         """
-
+        # breakpoint()
         # set up time-stepper latent variable data
         if self.training_ts:
 

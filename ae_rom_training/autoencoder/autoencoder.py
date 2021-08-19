@@ -30,6 +30,7 @@ class Autoencoder:
             self.encoder.assemble(input_dict, params, data_shape, batch_size=batch_size)
             if input_dict["mirrored_decoder"]:
                 self.decoder.mirror_encoder(self.encoder, input_dict)
+            # TODO: handle situations where decoder dense and reshape output sizes are not known (e.g. if strides change)
             self.decoder.assemble(input_dict, params, input_dict["latent_dim"][self.net_idx])
         else:
             self.encoder.model_obj = self.mllib.load_model(input_dict["model_dir"], "encoder" + network_suffix)

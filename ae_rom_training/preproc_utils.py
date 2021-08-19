@@ -2,9 +2,11 @@ import enum
 import re
 import os
 from math import ceil
+import random
 
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from hyperopt import tpe, rand
 from tensorflow.python.types.core import Value
 
@@ -152,7 +154,9 @@ def read_input_file(input_file):
     input_dict["data_order"] = input_dict_raw["data_order"]
     input_dict["network_order"] = catch_input(input_dict_raw, "network_order", "NHWC")
     input_dict["network_suffixes"] = [""] * input_dict["num_networks"]
+    input_dict["num_vars"] = []
     for i, net_idxs in enumerate(input_dict["var_network_idxs"]):
+        input_dict["num_vars"].append(len(net_idxs))
         for j, idx in enumerate(net_idxs):
             input_dict["network_suffixes"][i] += "_" + str(idx)
 
@@ -816,38 +820,78 @@ def sequencize(
     return data_train_input, data_train_output, data_val_input, data_val_output
 
 
-def norm_switch(data: list, norm_type, axes):
+def norm_switch(data: list, norm_type, axes, by_dof=False):
     """Compute normalization profile
 
     Here, data is a single array concatenated along the time axis.
     """
 
-    ones_prof = np.ones((1,) + data.shape[1:], dtype=np.float64)
-    zero_prof = np.zeros((1,) + data.shape[1:], dtype=np.float64)
+    data_concat = np.concatenate(data, axis=0)
+    num_snaps = data_concat.shape[0]
+    feat_shape = data_concat.shape[1:]
 
-    if norm_type == "minmax":
-        data_min = np.amin(data, axis=axes, keepdims=True)
-        data_max = np.amax(data, axis=axes, keepdims=True)
-        norm_sub = data_min * ones_prof
-        norm_fac = (data_max - data_min) * ones_prof
+    assert norm_type in ["minmax", "zscore", "l2", "none"], "Invalid choice of norm_type: " + norm_type
 
-    elif norm_type == "l2":
-        norm_fac = np.square(data)
-        for dim_idx in range(len(axes)):
-            norm_fac = np.sum(norm_fac, axis=axes[dim_idx], keepdims=True)
-        for dim_idx in range(len(axes)):
-            norm_fac[:] /= data.shape[axes[dim_idx]]
-        norm_fac = norm_fac * ones_prof
-        norm_sub = zero_prof
+    if not by_dof:
 
-    elif norm_type == "none":
-        norm_fac = ones_prof
-        norm_sub = zero_prof
+        ones_prof = np.ones((1,) + data[0].shape[1:], dtype=np.float64)
+        zero_prof = np.zeros((1,) + data[0].shape[1:], dtype=np.float64)
+
+        if norm_type == "minmax":
+
+            data_min = np.amin(data_concat, axis=axes, keepdims=True)
+            data_max = np.amax(data_concat, axis=axes, keepdims=True)
+            norm_sub = data_min * ones_prof
+            norm_fac = (data_max - data_min) * ones_prof
+
+        if norm_type == "zscore":
+            norm_sub = np.mean(data_concat, axis=axes, keepdims=True)
+            norm_fac = np.std(data_concat, axis=axes, keepdims=True)
+
+        elif norm_type == "l2":
+            norm_fac = np.square(data_concat)
+            for dim_idx in range(len(axes)):
+                norm_fac = np.sum(norm_fac, axis=axes[dim_idx], keepdims=True)
+            for dim_idx in range(len(axes)):
+                norm_fac[:] /= data_concat.shape[axes[dim_idx]]
+            norm_fac = norm_fac * ones_prof
+            norm_sub = zero_prof
+
+        elif norm_type == "none":
+            norm_fac = ones_prof
+            norm_sub = zero_prof
+
+        for data_idx, data_arr in enumerate(data):
+            data[data_idx] = (data_arr - norm_sub) / norm_fac
 
     else:
-        raise ValueError("Invalid choice of norm_type: " + norm_type)
 
-    return norm_sub, norm_fac
+        data_flat = np.reshape(data_concat, (num_snaps, -1), order="C")
+        
+        if norm_type == "minmax":
+            scaler = MinMaxScaler()
+            scaler.fit(data_flat)
+            data_min = np.reshape(scaler.data_min_, (1, ) + feat_shape, order="C")
+            data_max = np.reshape(scaler.data_max_, (1, ) + feat_shape, order="C")
+            norm_sub = data_min
+            norm_fac = data_max - data_min
+
+        elif norm_type == "zscore":
+            scaler = StandardScaler()
+            scaler.fit(data_flat)
+            norm_sub = np.reshape(scaler.mean_, (1, ) + feat_shape, order="C")
+            norm_fac = np.sqrt(np.reshape(scaler.var_, (1, ) + feat_shape, order="C"))
+
+        elif norm_type == "l2":
+            raise ValueError("norm_type = l2 with by_dof = True not implemented")
+
+        if norm_type != "none":
+            for data_idx, data_arr in enumerate(data):
+                data[data_idx] = np.reshape(
+                    scaler.transform(np.reshape(data_arr, (data_arr.shape[0], -1), order="C")), data_arr.shape, order="C"
+                )    
+
+    return data, norm_sub, norm_fac
 
 
 # determine how to normalized data given shape, normalize
@@ -873,16 +917,15 @@ def normalize_data_set(data: list, norm_type, model_dir, network_suffix, norms=N
         else:
             raise ValueError("Something went wrong with normalizing (data dimensions)")
 
-        data_concat = np.concatenate(data, axis=0)
-        norm_sub, norm_fac = norm_switch(data_concat, norm_type, axes=norm_axes)
+        data, norm_sub, norm_fac = norm_switch(data, norm_type, axes=norm_axes)
 
     # norms are provided
     else:
         norm_sub = norms[0]
         norm_fac = norms[1]
 
-    for idx, data_arr in enumerate(data):
-        data[idx] = (data_arr - norm_sub) / norm_fac
+        for idx, data_arr in enumerate(data):
+            data[idx] = (data_arr - norm_sub) / norm_fac
 
     if (norms is None) and save_norm:
 
@@ -894,6 +937,8 @@ def normalize_data_set(data: list, norm_type, model_dir, network_suffix, norms=N
 
     return data, norm_sub, norm_fac
 
+def manual_scaler(data, norm_sub, norm_fac):
+    data = (data - norm_sub) / norm_fac
 
 def remove_prefix(text: str, prefix: str):
     if text.startswith(prefix):
@@ -916,10 +961,11 @@ def get_shape_tuple(shape_var):
 
 
 def seed_rng(mllib):
-    """Seeds NumPy random number generator and ML library random number generator.
+    """Seeds Python, NumPy, and ML library random number generators.
     
     More or less resets RNG to a ground state, useful for ensuring model training is the same run to run.
     """
 
+    random.seed(RANDOM_SEED)
     np.random.seed(RANDOM_SEED)  # seed NumPy RNG
     mllib.seed_rng()

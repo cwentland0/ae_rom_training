@@ -42,6 +42,7 @@ LAYER_PARAM_DICT = {
     "use_bias": [bool, True],  # whether to apply bias to a layer's calculations
     "stable": [bool, True],  # whether to use stable formulation for continuous Koopman
     "return_sequences": [bool, nan],  # whether to return full output sequence of recurrent layer
+    "dropout_rate": [float, 0.0],  # probability of a dropout layer zeroing out an output
 }
 
 # training parameters

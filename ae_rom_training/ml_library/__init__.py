@@ -11,7 +11,7 @@ def get_ml_library(mllib_name, run_gpu):
     # Tensorflow-Keras
     TFKERAS_IMPORT_SUCCESS = True
     try:
-        os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # don't print all the TensorFlow warnings
+        os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # don't print all the TensorFlow warnings
         import tensorflow as tf
     except ImportError:
         TFKERAS_IMPORT_SUCCESS = False
