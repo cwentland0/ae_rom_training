@@ -1,11 +1,15 @@
 import os
+import GPUtil
 
 def get_ml_library(mllib_name, run_gpu):
     """Helper function to retrieve machine learning library helper classes."""
 
-    # set CUDA_VISIBLE_DEVICES to the GPU which has the lowest utilization
+    # set CUDA_VISIBLE_DEVICES to the GPU which has the lowest mem and util
     if run_gpu:
-        import setGPU
+        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        DEVICE_ID_LIST = GPUtil.getFirstAvailable(order="memory", maxLoad=0.25, maxMemory=0.25)
+        DEVICE_ID = DEVICE_ID_LIST[0]  # grab first element from list
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(DEVICE_ID)
 
     # Check whether ML libraries are accessible
     # Tensorflow-Keras

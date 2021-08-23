@@ -379,8 +379,7 @@ def agg_data_sets(
         assert (net_idxs is not None) and (
             ae_label is not None
         ), "If aggregating encoded data, must supply net_idxs and ae_label"
-        data_dir = os.path.join(data_dir, "encodings", ae_label)
-
+        
     if encoded:
         data_raw = [[] for _ in range(len(net_idxs))]
     else:
@@ -390,13 +389,14 @@ def agg_data_sets(
         data_load = []
         # if encoded data, need data from each network
         if encoded:
-            data_name_encoded = data_file[:-4]  # strip .npy
+            data_path, data_name = os.path.split(data_file)
+            data_name_encoded = data_name[:-4]  # strip .npy
             for var_idxs in net_idxs:
                 suffix = ""
                 for var_idx in var_idxs:
                     suffix += "_" + str(var_idx)
                 data_file_encoded = data_name_encoded + suffix + ".npy"
-                data_loc = os.path.join(data_dir, data_file_encoded)
+                data_loc = os.path.join(data_dir, data_path, "encodings", ae_label, data_file_encoded)
                 data_load.append(np.load(data_loc))
 
         # if full state data, should only be one file
