@@ -13,7 +13,7 @@ class KoopmanAEDiscrete(AEROM):
     """Autoencoder which learns discrete Koopman, via Otto and Rowley (2019)"""
 
     def __init__(self, net_idx, input_dict, mllib, network_suffix):
-
+        raise ValueError("Discrete Koopman is broken")
         if input_dict["train_ts"]:
             if input_dict["train_separate"]:
                 self.autoencoder = BaselineAE(net_idx, mllib)

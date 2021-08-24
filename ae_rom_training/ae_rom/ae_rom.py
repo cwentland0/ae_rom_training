@@ -224,10 +224,6 @@ class AEROM:
             if expr_key in input_dict:
                 expr_type = input_dict[expr_key]
 
-            if self.time_stepper is None:
-                if param_name in ["seq_length"]:
-                    continue
-
             # has no default
             if default is nan:
 

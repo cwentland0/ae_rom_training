@@ -82,13 +82,14 @@ class GenericRecurrentAETS(AEROM):
 
         Here, data_list_train, data_list_val contain the standardized, encoded latent variables
         """
-        # breakpoint()
+
         # set up time-stepper latent variable data
         if self.training_ts:
 
             seq_lookback = params["seq_lookback"]
-            seq_step = params["seq_step"]
+            seq_skip = params["seq_skip"]
             pred_length = params["pred_length"]
+            seq_dist = params["seq_dist"]
 
             data_train_input, data_train_output, data_val_input, data_val_output = sequencize(
                 data_list_train,
@@ -96,7 +97,8 @@ class GenericRecurrentAETS(AEROM):
                 data_list_val,
                 input_dict["split_idxs_val"],
                 seq_lookback,
-                seq_step,
+                seq_skip,
+                seq_dist,
                 pred_length,
                 separate_val=input_dict["separate_val"],
             )
@@ -142,6 +144,8 @@ class GenericRecurrentAETS(AEROM):
         self, data_list_train, data_list_val, optimizer, loss, options, input_dict, params,
     ):
         """Call custom training loop after organizing data"""
+
+        raise ValueError("seq_skip effects not implemented")
 
         seq_lookback = params["seq_lookback"]
         seq_step = params["seq_step"]

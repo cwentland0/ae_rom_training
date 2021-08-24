@@ -694,7 +694,7 @@ def hankelize(data: list, seq_length, seq_step=1):
     return data_seqs
 
 
-def window(data: list, seq_length, pred_length=1, seq_step=1):
+def window(data: list, seq_lookback, seq_dist, pred_length=1, seq_skip=1):
     """Similar to Hankelization, but returns prediction ``label'' data.
     
     data is assumed to be a list of NumPy arrays.
@@ -714,19 +714,35 @@ def window(data: list, seq_length, pred_length=1, seq_step=1):
         if num_dims == 1:
             data_arr = np.expand_dims(data_arr, axis=-1)
 
-        num_seqs = ceil((num_snaps - seq_length - pred_length + 1) / seq_step)
-        data_seqs.append(np.zeros((num_seqs, seq_length,) + data_arr.shape[1:], dtype=data_arr.dtype))
+        seq_length = seq_lookback * seq_skip
+        num_seqs = num_snaps - seq_length - pred_length + 1
+        data_seqs.append(np.zeros((num_seqs, seq_lookback,) + data_arr.shape[1:], dtype=data_arr.dtype))
         pred_seqs.append(np.zeros((num_seqs, pred_length,) + data_arr.shape[1:], dtype=data_arr.dtype))
         for seq_idx in range(num_seqs):
-            idx_start = seq_idx * seq_step
+            idx_start = seq_idx
             idx_end = idx_start + seq_length
-            data_seqs[-1][seq_idx, ...] = data_arr[idx_start:idx_end, ...]
+
+            # get sequence sampling distribution
+            if seq_dist == "uniform":
+                snap_idxs = np.arange(idx_start, idx_end, seq_skip)
+            elif seq_dist == "log":
+                snap_idxs = gen_log_space(idx_start, idx_end, seq_lookback, reverse=True)
+            else:
+                raise ValueError("Invalid seq_dist: " + str(seq_dist))
+
+            # get lookback sequence
+            data_seqs[-1][seq_idx, ...] = data_arr[snap_idxs, ...]
             pred_seqs[-1][seq_idx, ...] = data_arr[idx_end : idx_end + pred_length, ...]
 
         # account for final window
         if idx_end != num_snaps - pred_length:
             # TODO: if you want to roll this into hankelize, slice to None instead of -pred_length
-            data_seqs[-1][-1, ...] = data_arr[-seq_length - pred_length : -pred_length, ...]
+            if seq_dist == "uniform":
+                snap_idxs = np.arange(-seq_length - pred_length, -pred_length, seq_skip)
+            elif seq_dist == "log":
+                snap_idxs = gen_log_space(-seq_length - pred_length, -pred_length, seq_lookback, reverse=True)
+
+            data_seqs[-1][-1, ...] = data_arr[snap_idxs, ...]
             pred_seqs[-1][-1, ...] = data_arr[-pred_length:, ...]
 
     return data_seqs, pred_seqs
@@ -738,7 +754,8 @@ def sequencize(
     data_list_val,
     split_idxs_val,
     seq_lookback,
-    seq_step,
+    seq_skip,
+    seq_dist,
     pred_length=1,
     hankelize_data=False,
     separate_val=False,
@@ -769,28 +786,30 @@ def sequencize(
 
     # window data, making inputs and labels
     if hankelize_data:
-        data_seqs_in = hankelize(data_list_full, seq_lookback + pred_length, seq_step)
+        raise ValueError("Not fixed to accommodate seq_skip")
+        data_seqs_in = hankelize(data_list_full, seq_lookback + pred_length, seq_skip)
         if separate_val:
-            data_seqs_in_val = hankelize(data_list_val, seq_lookback + pred_length, seq_step)
+            data_seqs_in_val = hankelize(data_list_val, seq_lookback + pred_length, seq_skip)
     else:
-        data_seqs_in, data_seqs_out = window(data_list_full, seq_lookback, pred_length=pred_length, seq_step=seq_step)
+        data_seqs_in, data_seqs_out = window(data_list_full, seq_lookback, seq_dist, pred_length=pred_length, seq_skip=seq_skip)
         if separate_val:
-            data_seqs_in_val, data_seqs_out_val = window(data_list_val, seq_lookback, pred_length=pred_length, seq_step=seq_step)
+            data_seqs_in_val, data_seqs_out_val = window(data_list_val, seq_lookback, seq_dist, pred_length=pred_length, seq_skip=seq_skip)
 
     # redistribute training and validation data
     data_list_train_seqs = []
     data_list_val_seqs = []
     data_list_train_seqs_pred = []
     data_list_val_seqs_pred = []
+    seq_length = seq_lookback * seq_skip
     for idx, data_seqs in enumerate(data_seqs_in):
 
-        # need to exclude 0:seq_lookback, subtract seq_lookback to get new sorting indices
+        # need to exclude 0:seq_length, subtract seq_length to get new sorting indices
         # NOTE: assume_unique maintains shuffle
-        idxs_train = np.setdiff1d(split_idxs_train[idx], np.arange(0, seq_lookback), assume_unique=True) - seq_lookback
+        idxs_train = np.setdiff1d(split_idxs_train[idx], np.arange(0, seq_length), assume_unique=True) - seq_length
         data_list_train_seqs.append(data_seqs[idxs_train, ...])
 
         if not separate_val:
-            idxs_val = np.setdiff1d(split_idxs_val[idx], np.arange(0, seq_lookback), assume_unique=True) - seq_lookback
+            idxs_val = np.setdiff1d(split_idxs_val[idx], np.arange(0, seq_length), assume_unique=True) - seq_length
             data_list_val_seqs.append(data_seqs[idxs_val, ...])
 
         # make separate prediction matrix if windowing data
@@ -958,6 +977,34 @@ def get_shape_tuple(shape_var):
         return shape_var
     else:
         raise TypeError("Invalid shape input of type " + str(type(shape_var)))
+
+    
+def gen_log_space(start, stop, n, reverse=False):
+    """Generate logorithmically-spaced range from 0 to limit, with n elements.
+    
+    Modified from answer by user Avaris at https://stackoverflow.com/questions/12418234/logarithmically-spaced-integers
+    """
+
+    result = [1]
+    limit = stop - start
+    if n>1:  # just a check to avoid ZeroDivisionError
+        ratio = (float(limit)/result[-1]) ** (1.0/(n-len(result)))
+    while len(result)<n:
+        next_value = result[-1]*ratio
+        if next_value - result[-1] >= 1:
+            # safe zone. next_value will be a different integer
+            result.append(next_value)
+        else:
+            # problem! same integer. we need to find next_value by artificially incrementing previous value
+            result.append(result[-1]+1)
+            # recalculate the ratio so that the remaining values will scale correctly
+            ratio = (float(limit)/result[-1]) ** (1.0/(n-len(result)))
+    # round, re-adjust to 0 indexing (i.e. minus 1) and return np.uint64 array
+    out = np.array(list(map(lambda x: round(x)-1, result)), dtype=np.uint64) + start
+    if reverse:
+        out = -(out[::-1] - out[-1]) + out[0]  # reverse logorithmic spacing
+    
+    return out
 
 
 def seed_rng(mllib):

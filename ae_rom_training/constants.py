@@ -54,9 +54,9 @@ TRAIN_PARAM_DICT = {
     "early_stopping": [bool, False],  # whether to use early stopping
     "es_patience": [int, nan],  # number of iterations before early-stopping kicks in
     "batch_size": [int, nan],  # batch size
-    "seq_length": [int, 2],  # length of time series sequence for Hankelizing data
-    "seq_step": [int, 1],  # step size for sliding window for Hankelizing data
-    "seq_lookback": [int, 1],  # lookback window for recurrent time steppers
+    "seq_skip": [int, 1],  # step size between samples in input sequence
+    "seq_lookback": [int, 1],  # number of samples in lookback window for recurrent time steppers
+    "seq_dist": [str, "uniform"],  # distribution of lookback samples
     "pred_length": [int, 1],  # number of future states to predict in time stepper
     "normalize": [bool, False],  # whether to normalize the error contributions in combine AE + TS loss
     "eps": [float, 1e-12],  # additive factor to prevent denominator from becoming zero

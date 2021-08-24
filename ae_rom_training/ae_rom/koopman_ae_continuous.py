@@ -12,7 +12,7 @@ class KoopmanAEContinuous(AEROM):
     """Autoencoder which learns discrete Koopman, via Otto and Rowley (2019)"""
 
     def __init__(self, net_idx, input_dict, mllib, network_suffix):
-
+        raise ValueError("Continuous Koopman is broken")
         self.autoencoder = Autoencoder(net_idx, mllib)
         self.time_stepper = Koopman(net_idx, input_dict, mllib, continuous=True)
 
