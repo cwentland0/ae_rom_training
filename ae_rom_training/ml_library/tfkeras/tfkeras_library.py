@@ -748,8 +748,11 @@ class TFKerasLibrary(MLLibrary):
 
         # get trainable variables
         trainable_vars = []
-        for grad_source in ae_rom.grad_source_list:
+        trainable_vars_ae = []
+        for grad_idx, grad_source in enumerate(ae_rom.grad_source_list):
             trainable_vars += grad_source.trainable_variables
+            if grad_idx != 2:
+                trainable_vars_ae += grad_source.trainable_variables
 
         metrics = ["loss", "val_loss"]
 
@@ -766,10 +769,20 @@ class TFKerasLibrary(MLLibrary):
                 es_loss = inf
 
         # training loop
+        check_ae_loss = np.Inf
+        start_full = False
         for epoch in range(max_epochs):
             print("Epoch " + str(epoch + 1) + "/" + str(max_epochs))
 
             progbar = Progbar(num_samps, stateful_metrics=metrics, verbose=verbose)
+
+            if (check_ae_loss > 0.01) and (not start_full):
+                only_ae = True
+                trainable_vars_in = trainable_vars_ae
+            else:
+                start_full = True
+                only_ae = False
+                trainable_vars_in = trainable_vars
 
             # batch loop
             loss_val = 0.0
@@ -789,17 +802,19 @@ class TFKerasLibrary(MLLibrary):
                         continuous=continuous,
                         time_values=time_values_train_batch,
                         eps=params["eps"],
+                        only_ae=only_ae,
                         **kwargs,
                     )
                     loss_train = loss_train_list[0]
-                grad = tape.gradient(target=loss_train, sources=trainable_vars)
-                optimizer.apply_gradients(zip(grad, trainable_vars))
+                grad = tape.gradient(target=loss_train, sources=trainable_vars_in)
+                optimizer.apply_gradients(zip(grad, trainable_vars_in))
 
                 if verbose == 1:
-                    progbar.update(num_samps, values=[("loss", loss_train.numpy()), ("val_loss", loss_val.numpy())])
+                    progbar.update(num_samps, values=[("loss", loss_train.numpy()), ("val_loss", loss_val.numpy()), ()])
 
+            check_ae_loss = loss_train_list[1].numpy()
             loss_val_list = loss(
-                data_input_val, data_output_val, ae_rom, continuous=continuous, time_values=time_values_val, **kwargs,
+                data_input_val, data_output_val, ae_rom, continuous=continuous, time_values=time_values_val, only_ae=only_ae, **kwargs,
             )
             loss_val = loss_val_list[0]
             progbar.update(num_samps, values=[("loss", loss_train.numpy()), ("val_loss", loss_val.numpy())])
@@ -816,9 +831,15 @@ class TFKerasLibrary(MLLibrary):
                         loss_addtl_train_list.append(np.zeros(max_epochs))
                         loss_addtl_val_list.append(np.zeros(max_epochs))
 
-                for loss_idx in range(len(loss_train_list) - 1):
-                    loss_addtl_train_list[loss_idx][epoch] = loss_train_list[loss_idx + 1].numpy()
-                    loss_addtl_val_list[loss_idx][epoch] = loss_val_list[loss_idx + 1].numpy()
+                if only_ae:
+                    loss_train_in = loss_train_list[:-1]
+                    loss_val_in = loss_val_list[:-1]
+                else:
+                    loss_train_in = loss_train_list
+                    loss_val_in = loss_val_list
+                for loss_idx in range(len(loss_train_in) - 1):
+                    loss_addtl_train_list[loss_idx][epoch] = loss_train_in[loss_idx + 1].numpy()
+                    loss_addtl_val_list[loss_idx][epoch] = loss_val_in[loss_idx + 1].numpy()
 
             # check for early stopping
             if es is not None:
@@ -843,7 +864,7 @@ class TFKerasLibrary(MLLibrary):
                             ae_rom.autoencoder.encoder.model_obj.set_weights(best_encoder_weights)
                             ae_rom.autoencoder.decoder.model_obj.set_weights(best_decoder_weights)
                             ae_rom.time_stepper.stepper.model_obj.set_weights(best_stepper_weights)
-                        
+
                         # truncate loss histories
                         loss_train_hist = loss_train_hist[:epoch]
                         loss_val_hist = loss_val_hist[:epoch]

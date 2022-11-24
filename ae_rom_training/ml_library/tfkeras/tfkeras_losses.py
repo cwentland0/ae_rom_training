@@ -17,8 +17,17 @@ def pure_mse(y_true, y_pred):
     return mse(y_true, y_pred)
 
 
-@tf.function
-def ae_ts_combined_error(data_seq, data_seq_ignore, ae_rom, lookback=1, continuous=False, time_values=None, eps=1e-12, **kwargs):
+#@tf.function
+def ae_ts_combined_error(
+    data_seq,
+    data_seq_ignore,
+    ae_rom, lookback=1,
+    continuous=False,
+    time_values=None,
+    eps=1e-12,
+    only_ae=False,
+    **kwargs
+):
     """Simple loss for prediction and reconstruction error of combined AE/TS."""
 
     seq_length = data_seq.shape[1]
@@ -54,7 +63,7 @@ def ae_ts_combined_error(data_seq, data_seq_ignore, ae_rom, lookback=1, continuo
     norm_axes_seq = [i for i in range(2, 2 + len(data_feat_shape))]
     norm_axes_single = [i for i in range(1, 1 + len(data_feat_shape))]
     loss_recon_l2 = tf.math.reduce_sum(tf.math.squared_difference(sol_decode, sol_seq[:, :lookback, ...]), axis=norm_axes_seq)
-    
+
     # normalize by l2 norm of truth
     # NOTE: average over feature dimensions cancels out when normalizing
     if kwargs["normalize"]:
@@ -63,10 +72,15 @@ def ae_ts_combined_error(data_seq, data_seq_ignore, ae_rom, lookback=1, continuo
         loss_recon_l2 = tf.math.divide(loss_recon_l2, sol_l2)
     else:
         # average over feature dimensions for MSE
-        loss_recon_l2 = tf.math.divide(loss_recon_l2, num_feats)
-    
+        loss_recon_l2 = tf.math.divide(loss_recon_l2, float(num_feats))
+
     # average over batch dimension, sum over sequences
     loss_recon = tf.math.reduce_sum(tf.math.reduce_mean(loss_recon_l2, axis=0))
+    loss_recon_init = loss_recon.numpy()
+
+    if only_ae:
+        loss_recon /= seq_length
+        return [loss_recon, loss_recon, 0.0]
 
     # prediction
     for seq in range(lookback, seq_length):
@@ -85,7 +99,7 @@ def ae_ts_combined_error(data_seq, data_seq_ignore, ae_rom, lookback=1, continuo
         # compute l2 norm of error over feature dimensions
         loss_recon_l2 = tf.math.reduce_sum(tf.math.squared_difference(sol_pred, sol_seq[:, seq, ...]), axis=norm_axes_single)
         loss_step_l2 = tf.math.reduce_sum(tf.math.squared_difference(latent_vars_pred, latent_vars_encode[:, seq, :]), axis=-1)
-        
+
         # normalize by l2 norm of truth
         if kwargs["normalize"]:
             # add small number to avoid divide by zero
@@ -94,11 +108,14 @@ def ae_ts_combined_error(data_seq, data_seq_ignore, ae_rom, lookback=1, continuo
             loss_recon_l2 = tf.math.divide(loss_recon_l2, sol_l2)
             loss_step_l2 = tf.math.divide(loss_step_l2, latent_vars_l2)
         else:
-            loss_recon_l2 = tf.math.divide(loss_recon_l2, num_feats)
-            loss_step_l2 = tf.math.divide(loss_step_l2, latent_dims)
-        
+            loss_recon_l2 = tf.math.divide(loss_recon_l2, float(num_feats))
+            loss_step_l2 = tf.math.divide(loss_step_l2, float(latent_dims))
+
         # average over batch dimension, add to running total
+        # breakpoint()
+        loss_recon_second = tf.math.reduce_mean(loss_recon_l2).numpy()
         loss_recon += tf.math.reduce_mean(loss_recon_l2)
+
         loss_step += tf.math.reduce_mean(loss_step_l2)
 
         # update lookback window
@@ -113,6 +130,9 @@ def ae_ts_combined_error(data_seq, data_seq_ignore, ae_rom, lookback=1, continuo
                     )
 
     loss_recon /= seq_length
-    loss_step /= seq_length - lookback
+    loss_step /= (seq_length - lookback)
+    #breakpoint()
+
+    # print(str(loss_recon_init) + " " + str(loss_recon_second) + " " + str(loss_step.numpy()))
 
     return [loss_recon + loss_step, loss_recon, loss_step]

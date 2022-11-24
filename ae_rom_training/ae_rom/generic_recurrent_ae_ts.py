@@ -97,9 +97,9 @@ class GenericRecurrentAETS(AEROM):
                 data_list_val,
                 input_dict["split_idxs_val"],
                 seq_lookback,
-                seq_skip,
                 seq_dist,
-                pred_length,
+                seq_skip=seq_skip,
+                pred_length=pred_length,
                 separate_val=input_dict["separate_val"],
             )
 
@@ -145,10 +145,11 @@ class GenericRecurrentAETS(AEROM):
     ):
         """Call custom training loop after organizing data"""
 
-        raise ValueError("seq_skip effects not implemented")
+        print("seq_skip effects not implemented, setting to 1")
 
         seq_lookback = params["seq_lookback"]
-        seq_step = params["seq_step"]
+        #seq_skip = params["seq_skip"]
+        seq_skip = 1
         pred_length = params["pred_length"]
 
         data_train_seqs, _, data_val_seqs, _ = sequencize(
@@ -157,8 +158,8 @@ class GenericRecurrentAETS(AEROM):
             data_list_val,
             input_dict["split_idxs_val"],
             seq_lookback,
-            seq_step,
             pred_length,
+            seq_skip=seq_skip,
             hankelize_data=True,
         )
 

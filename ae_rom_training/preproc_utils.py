@@ -754,8 +754,8 @@ def sequencize(
     data_list_val,
     split_idxs_val,
     seq_lookback,
-    seq_skip,
     seq_dist,
+    seq_skip=1,
     pred_length=1,
     hankelize_data=False,
     separate_val=False,
@@ -786,7 +786,8 @@ def sequencize(
 
     # window data, making inputs and labels
     if hankelize_data:
-        raise ValueError("Not fixed to accommodate seq_skip")
+        if seq_skip != 1:
+            raise ValueError("Not fixed to accommodate seq_skip")
         data_seqs_in = hankelize(data_list_full, seq_lookback + pred_length, seq_skip)
         if separate_val:
             data_seqs_in_val = hankelize(data_list_val, seq_lookback + pred_length, seq_skip)
