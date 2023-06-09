@@ -15,7 +15,8 @@ setup(
     description="Framework for training autoencoder-based ROMs",
     long_description=readme,
     license=license,
-    install_requires=["tensorflow>=2.4.0", "numpy", "scikit-learn", "hyperopt", "setGPU", "keras-tcn"],
+    packages=['ae_rom_training'],
+    install_requires=["tensorflow>=2.4.0", "numpy", "scikit-learn", "hyperopt", "setGPU", "keras-tcn", "GPUtil"],
     entry_points={"console_scripts": ["ae_rom_training = ae_rom_training.driver:main"]},
     python_requires=">=3.6",
 )
