@@ -1,0 +1,74 @@
+mllib_name = "tfkeras"
+run_gpu = False
+
+# addresses
+data_dir    = ""
+model_dir   = ""
+model_label = ""
+
+
+# data definitions
+var_network_idxs = [[0,2,3],[1]]
+
+data_files_train     = [""]
+idx_start_list_train = [0]
+idx_end_list_train   = [None]
+idx_skip_list_train  = [1]
+
+val_perc = 0.1
+#data_files_val     = [""]
+#idx_start_list_val = [0]
+#idx_end_list_val   = [None]
+#idx_skip_list_val  = [1]
+
+# ordering
+data_order    = "CHWN"
+network_order = "NHWC"
+
+# data pre-processing
+split_scheme     = "random"
+centering_scheme = "init_cond"
+normal_scheme    = "minmax"
+
+# HyperOpt
+use_hyperopt       = False
+hyperopt_algo      = "tpe" 
+hyperopt_max_evals = 25
+
+# global network parameters
+aerom_type = 'baseline_ae'
+train_ae = True
+train_ts = False
+latent_dim = 10
+
+# encoder
+encoder_layer_type = ["conv", "conv", "conv", "dense"]
+encoder_layer_input_idx = [-1, -1, -1, -1]
+encoder_activation = "swish"
+encoder_num_filters = [16, 32, 64, None]
+encoder_strides = [(2,2), (2,2), (2,2), None]
+encoder_kern_size = 8
+encoder_padding = "same"
+encoder_kern_reg = None
+encoder_kern_reg_val = None
+encoder_act_reg = None
+encoder_act_reg_val = None
+encoder_bias_reg = None
+encoder_bias_reg_val = None
+encoder_kern_init = "glorot_uniform"
+encoder_bias_init = "zeros"
+encoder_output_size = [None, None, None, -1]
+
+# decoder
+mirrored_decoder = True
+decoder_final_activation = "linear"
+
+# optimization parameters
+ae_batch_size     = 25
+ae_max_epochs     = 5000
+ae_loss_func      = "mse"
+ae_optimizer      = "Adam"
+ae_early_stopping = True
+ae_es_patience    = 250
+ae_learn_rate     = 1e-4
+
